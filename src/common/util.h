@@ -176,7 +176,7 @@ namespace tools
       sa.sa_handler = posix_handler;
       sa.sa_flags = 0;
       /* Only blocks SIGINT, SIGTERM and SIGPIPE */
-      sigaction(SIGINT, &sa, NULL);
+      sigaction(SIGINT, &sa, nullptr);
       signal(SIGTERM, posix_handler);
       signal(SIGPIPE, SIG_IGN);
       m_handler = t;

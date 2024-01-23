@@ -1112,7 +1112,7 @@ bool simple_wallet::make_multisig_main(const std::vector<std::string> &args, boo
   }
 
   uint32_t total;
-  if (!m_wallet->multisig(NULL, &threshold, &total))
+  if (!m_wallet->multisig(nullptr, &threshold, &total))
   {
     fail_msg_writer() << tr("Error creating multisig: new wallet is not multisig");
     return false;
@@ -1184,7 +1184,7 @@ bool simple_wallet::exchange_multisig_keys_main(const std::vector<std::string> &
         return true;
       } else {
         uint32_t threshold, total;
-        m_wallet->multisig(NULL, &threshold, &total);
+        m_wallet->multisig(nullptr, &threshold, &total);
         success_msg_writer() << tr("Multisig wallet has been successfully created. Current wallet type: ") << threshold << "/" << total;
         success_msg_writer() << tr("Multisig address: ") << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
       }
@@ -1458,7 +1458,7 @@ bool simple_wallet::sign_multisig_main(const std::vector<std::string> &args, boo
   if (txids.empty())
   {
     uint32_t threshold;
-    m_wallet->multisig(NULL, &threshold);
+    m_wallet->multisig(nullptr, &threshold);
     uint32_t signers_needed = threshold - signers - 1;
     success_msg_writer(true) << tr("Transaction successfully signed to file ") << filename << ", "
         << signers_needed << " more signer(s) needed";
@@ -2165,7 +2165,7 @@ bool simple_wallet::public_nodes(const std::vector<std::string> &args)
       return true;
     }
 
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     message_writer() << boost::format("%32s %16s") % tr("address") % tr("last_seen");
     for (const auto &node: nodes)
     {
@@ -3040,7 +3040,7 @@ simple_wallet::simple_wallet()
   , m_auto_refresh_refreshing(false)
   , m_in_manual_refresh(false)
   , m_current_subaddress_account(0)
-  , m_last_activity_time(time(NULL))
+  , m_last_activity_time(time(nullptr))
   , m_locked(false)
   , m_in_command(false)
 {
@@ -4471,7 +4471,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     message_writer(console_color_red, true) << (boost::format(tr("Warning: using an untrusted daemon at %s")) % m_wallet->get_daemon_address()).str();
     message_writer(console_color_red, true) << boost::format(tr("Using a third party daemon can be detrimental to your security and privacy"));
     bool ssl = false;
-    if (m_wallet->check_connection(NULL, &ssl) && !ssl)
+    if (m_wallet->check_connection(nullptr, &ssl) && !ssl)
       message_writer(console_color_red, true) << boost::format(tr("Using your own without SSL exposes your RPC traffic to monitoring"));
     message_writer(console_color_red, true) << boost::format(tr("You are strongly encouraged to connect to the Monero network using your own daemon"));
     message_writer(console_color_red, true) << boost::format(tr("If you or someone you trust are operating this daemon, you can use --trusted-daemon"));
@@ -4496,7 +4496,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
   if (welcome)
     message_writer(console_color_yellow, true) << tr("If you are new to Monero, type \"welcome\" for a brief overview.");
 
-  m_last_activity_time = time(NULL);
+  m_last_activity_time = time(nullptr);
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -4554,7 +4554,7 @@ bool simple_wallet::try_connect_to_daemon(bool silent, uint32_t* version)
   if (!version)
     version = &version_;
   bool wallet_is_outdated = false, daemon_is_outdated = false;
-  if (!m_wallet->check_connection(version, NULL, 200000, &wallet_is_outdated, &daemon_is_outdated))
+  if (!m_wallet->check_connection(version, nullptr, 200000, &wallet_is_outdated, &daemon_is_outdated))
   {
     if (!silent)
     {
@@ -5676,7 +5676,7 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
   }
 
   // prevent it from triggering the idle screen due to waiting for a foreground refresh
-  m_last_activity_time = time(NULL);
+  m_last_activity_time = time(nullptr);
 
   return true;
 }
@@ -6066,7 +6066,7 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
         continue;
       const cryptonote::txin_to_key& in_key = boost::get<cryptonote::txin_to_key>(tx.vin[i]);
       const tools::wallet2::transfer_details &td = m_wallet->get_transfer_details(construction_data.selected_transfers[i]);
-      const cryptonote::tx_source_entry *sptr = NULL;
+      const cryptonote::tx_source_entry *sptr = nullptr;
       for (const auto &src: construction_data.sources)
         if (src.outputs[src.real_output].second.dest == td.get_public_key())
           sptr = &src;
@@ -6232,7 +6232,7 @@ void simple_wallet::check_for_inactivity_lock(bool user)
       }
       catch (...) { /* do nothing, just let the loop loop */ }
     }
-    m_last_activity_time = time(NULL);
+    m_last_activity_time = time(nullptr);
     m_in_command = false;
     m_locked = false;
   }
@@ -6240,11 +6240,11 @@ void simple_wallet::check_for_inactivity_lock(bool user)
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::on_command(bool (simple_wallet::*cmd)(const std::vector<std::string>&), const std::vector<std::string> &args)
 {
-  m_last_activity_time = time(NULL);
+  m_last_activity_time = time(nullptr);
 
   m_in_command = true;
   epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){
-    m_last_activity_time = time(NULL);
+    m_last_activity_time = time(nullptr);
     m_in_command = false;
   });
 
@@ -8989,7 +8989,7 @@ bool simple_wallet::check_inactivity()
     if (!m_locked && !m_in_command)
     {
       const uint32_t seconds = m_wallet->inactivity_lock_timeout();
-      if (seconds > 0 && time(NULL) - m_last_activity_time > seconds)
+      if (seconds > 0 && time(nullptr) - m_last_activity_time > seconds)
       {
         m_locked = true;
         m_cmd_binder.cancel_input();
@@ -9035,7 +9035,7 @@ std::string simple_wallet::get_prompt() const
     return std::string("[") + tr("locked due to inactivity") + "]";
   std::string addr_start = m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}).substr(0, 6);
   std::string prompt = std::string("[") + tr("wallet") + " " + addr_start;
-  if (!m_wallet->check_connection(NULL))
+  if (!m_wallet->check_connection(nullptr))
     prompt += tr(" (no daemon)");
   else if (!m_wallet->is_synced())
     prompt += tr(" (out of sync)");
@@ -9527,7 +9527,7 @@ bool simple_wallet::address_book(const std::vector<std::string> &args/* = std::v
         description += " ";
       description += args[i];
     }
-    m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, description, info.is_subaddress);
+    m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : nullptr, description, info.is_subaddress);
   }
   else
   {
@@ -10460,7 +10460,7 @@ void simple_wallet::list_mms_messages(const std::vector<mms::message> &messages)
   message_writer() << boost::format("%4s %-4s %-30s %-21s %7s %3s %-15s %-40s") % tr("Id") % tr("I/O") % tr("Authorized Signer")
           % tr("Message Type") % tr("Height") % tr("R") % tr("Message State") % tr("Since");
   mms::message_store& ms = m_wallet->get_message_store();
-  uint64_t now = (uint64_t)time(NULL);
+  uint64_t now = (uint64_t)time(nullptr);
   for (size_t i = 0; i < messages.size(); ++i)
   {
     const mms::message &m = messages[i];
@@ -10535,7 +10535,7 @@ void simple_wallet::show_message(const mms::message &m)
   default:
     display_content = false;
   }
-  uint64_t now = (uint64_t)time(NULL);
+  uint64_t now = (uint64_t)time(nullptr);
   message_writer() << "";
   message_writer() << tr("Message ") << m.id;
   message_writer() << tr("In/out: ") << ms.message_direction_to_string(m.direction);

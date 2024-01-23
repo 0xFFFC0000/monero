@@ -171,7 +171,7 @@ namespace cryptonote
       * optionally updates the miner's block template.
       *
       * @param block_blob the block to be added
-      * @param block the block to be added, or NULL
+      * @param block the block to be added, or nullptr
       * @param bvc return-by-reference metadata context about the block's validity
       * @param update_miner_blocktemplate whether or not to update the miner's block template
       *
@@ -285,7 +285,7 @@ namespace cryptonote
       *
       * @return false if one of the init steps fails, otherwise true
       */
-     bool init(const boost::program_options::variables_map& vm, const test_options *test_options = NULL, const GetCheckpointsCallback& get_checkpoints = nullptr, bool allow_dns = true);
+     bool init(const boost::program_options::variables_map& vm, const test_options *test_options = nullptr, const GetCheckpointsCallback& get_checkpoints = nullptr, bool allow_dns = true);
 
      /**
       * @copydoc Blockchain::reset_and_set_genesis_block
@@ -412,7 +412,7 @@ namespace cryptonote
       *
       * @note see Blockchain::get_block_by_hash
       */
-     bool get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan = NULL) const;
+     bool get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan = nullptr) const;
 
      /**
       * @copydoc Blockchain::get_alternative_blocks
@@ -575,8 +575,8 @@ namespace cryptonote
       *
       * @note see Blockchain::have_block
       */
-     bool have_block_unlocked(const crypto::hash& id, int *where = NULL) const;
-     bool have_block(const crypto::hash& id, int *where = NULL) const;
+     bool have_block_unlocked(const crypto::hash& id, int *where = nullptr) const;
+     bool have_block(const crypto::hash& id, int *where = nullptr) const;
 
      /**
       * @copydoc Blockchain::get_short_chain_history

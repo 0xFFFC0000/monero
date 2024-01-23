@@ -63,7 +63,7 @@ public:
     , const boost::optional<tools::login>& user
     , const epee::net_utils::ssl_options_t& ssl_options
     , bool is_rpc = true
-    , cryptonote::core_rpc_server* rpc_server = NULL
+    , cryptonote::core_rpc_server* rpc_server = nullptr
     );
 
   ~t_rpc_command_executor();

@@ -341,7 +341,7 @@ HardFork::State HardFork::get_state(time_t t) const
 
 HardFork::State HardFork::get_state() const
 {
-  return get_state(time(NULL));
+  return get_state(time(nullptr));
 }
 
 uint8_t HardFork::get(uint64_t height) const

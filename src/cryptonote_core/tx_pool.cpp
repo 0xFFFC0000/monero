@@ -280,7 +280,7 @@ namespace cryptonote
         meta.last_failed_height = 0;
         meta.last_failed_id = null_hash;
         meta.receive_time = receive_time;
-        meta.last_relayed_time = time(NULL);
+        meta.last_relayed_time = time(nullptr);
         meta.relayed = relayed;
         meta.set_relay_method(tx_relay);
         meta.double_spend_seen = have_tx_keyimges_as_spent(tx, id);
@@ -799,7 +799,7 @@ namespace cryptonote
   {
     using clock = std::chrono::system_clock;
 
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     if (uint64_t{std::numeric_limits<time_t>::max()} < now || time_t(now) < m_next_check)
       return false;
 
@@ -1043,7 +1043,7 @@ namespace cryptonote
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     const relay_category category = include_sensitive ? relay_category::all : relay_category::broadcasted;
     backlog.reserve(m_blockchain.get_txpool_tx_count(include_sensitive));
     m_blockchain.for_all_txpool_txes([&backlog, now](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata_ref *bd){
@@ -1117,7 +1117,7 @@ namespace cryptonote
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     const relay_category category = include_sensitive ? relay_category::all : relay_category::broadcasted;
     std::map<uint64_t, txpool_histo> agebytes;
     stats.txs_total = m_blockchain.get_txpool_tx_count(include_sensitive);
@@ -1809,7 +1809,7 @@ namespace cryptonote
   void tx_memory_pool::add_tx_to_transient_lists(const crypto::hash& txid, double fee, time_t receive_time)
   {
 
-    time_t now = time(NULL);
+    time_t now = time(nullptr);
     const std::unordered_map<crypto::hash, time_t>::iterator it = m_added_txs_by_id.find(txid);
     if (it == m_added_txs_by_id.end())
     {
@@ -1870,7 +1870,7 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   void tx_memory_pool::track_removed_tx(const crypto::hash& txid, bool sensitive)
   {
-    time_t now = time(NULL);
+    time_t now = time(nullptr);
     m_removed_txs_by_time.insert(std::make_pair(now, removed_tx_info{txid, sensitive}));
     MDEBUG("Transaction removed from pool: txid " << txid << ", total entries in removed list now " << m_removed_txs_by_time.size());
     if (m_removed_txs_start_time == (time_t)0)

@@ -118,8 +118,8 @@ namespace cryptonote {
 
     uint64_t reward_hi;
     uint64_t reward_lo;
-    div128_64(product_hi, product_lo, median_weight, &reward_hi, &reward_lo, NULL, NULL);
-    div128_64(reward_hi, reward_lo, median_weight, &reward_hi, &reward_lo, NULL, NULL);
+    div128_64(product_hi, product_lo, median_weight, &reward_hi, &reward_lo, nullptr, nullptr);
+    div128_64(reward_hi, reward_lo, median_weight, &reward_hi, &reward_lo, nullptr, nullptr);
     assert(0 == reward_hi);
     assert(reward_lo < base_reward);
 

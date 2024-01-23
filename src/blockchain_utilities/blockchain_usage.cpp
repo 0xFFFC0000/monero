@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
   //
   // cannot match blockchain_storage setup above with just one line,
   // e.g.
-  //   Blockchain* core_storage = new Blockchain(NULL);
+  //   Blockchain* core_storage = new Blockchain(nullptr);
   // because unlike blockchain_storage constructor, which takes a pointer to
   // tx_memory_pool, Blockchain's constructor takes tx_memory_pool object.
   LOG_PRINT_L0("Initializing source blockchain (BlockchainDB)");
@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
   std::unique_ptr<BlockchainAndPool> core_storage = std::make_unique<BlockchainAndPool>();
 
   BlockchainDB* db = new_db();
-  if (db == NULL)
+  if (db == nullptr)
   {
     LOG_ERROR("Failed to initialize a database");
     throw std::runtime_error("Failed to initialize a database");

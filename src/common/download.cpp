@@ -195,7 +195,7 @@ namespace tools
         return;
       }
       MDEBUG("GETting " << u_c.uri);
-      const epee::net_utils::http::http_response_info *info = NULL;
+      const epee::net_utils::http::http_response_info *info = nullptr;
       epee::net_utils::http::fields_list fields;
       if (existing_size > 0)
       {
@@ -275,21 +275,21 @@ namespace tools
 
   bool download_finished(const download_async_handle &control)
   {
-    CHECK_AND_ASSERT_MES(control != 0, false, "NULL async download handle");
+    CHECK_AND_ASSERT_MES(control != 0, false, "nullptr async download handle");
     boost::lock_guard<boost::mutex> lock(control->mutex);
     return control->stopped;
   }
 
   bool download_error(const download_async_handle &control)
   {
-    CHECK_AND_ASSERT_MES(control != 0, false, "NULL async download handle");
+    CHECK_AND_ASSERT_MES(control != 0, false, "nullptr async download handle");
     boost::lock_guard<boost::mutex> lock(control->mutex);
     return !control->success;
   }
 
   bool download_wait(const download_async_handle &control)
   {
-    CHECK_AND_ASSERT_MES(control != 0, false, "NULL async download handle");
+    CHECK_AND_ASSERT_MES(control != 0, false, "nullptr async download handle");
     {
       boost::lock_guard<boost::mutex> lock(control->mutex);
       if (control->stopped)
@@ -305,7 +305,7 @@ namespace tools
 
   bool download_cancel(const download_async_handle &control)
   {
-    CHECK_AND_ASSERT_MES(control != 0, false, "NULL async download handle");
+    CHECK_AND_ASSERT_MES(control != 0, false, "nullptr async download handle");
     {
       boost::lock_guard<boost::mutex> lock(control->mutex);
       if (control->stopped)

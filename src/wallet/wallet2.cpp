@@ -1183,8 +1183,8 @@ void wallet_device_callback::on_progress(const hw::device_progress& event)
 
 wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std::unique_ptr<epee::net_utils::http::http_client_factory> http_client_factory):
   m_http_client(http_client_factory->create()),
-  m_multisig_rescan_info(NULL),
-  m_multisig_rescan_k(NULL),
+  m_multisig_rescan_info(nullptr),
+  m_multisig_rescan_k(nullptr),
   m_upper_transaction_weight_limit(0),
   m_run(true),
   m_callback(0),
@@ -2305,7 +2305,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
     std::vector<crypto::key_derivation> additional_derivations;
     tx_extra_additional_pub_keys additional_tx_pub_keys;
-    const wallet2::is_out_data *is_out_data_ptr = NULL;
+    const wallet2::is_out_data *is_out_data_ptr = nullptr;
     if (tx_cache_data.primary.empty())
     {
       hw::device &hwdev = m_account.get_device();
@@ -2496,7 +2496,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (m_multisig)
             {
               THROW_WALLET_EXCEPTION_IF(!m_multisig_rescan_k && m_multisig_rescan_info,
-                  error::wallet_internal_error, "NULL m_multisig_rescan_k");
+                  error::wallet_internal_error, "nullptr m_multisig_rescan_k");
               if (m_multisig_rescan_info && m_multisig_rescan_info->front().size() >= m_transfers.size())
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
@@ -2571,7 +2571,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             if (m_multisig)
             {
               THROW_WALLET_EXCEPTION_IF(!m_multisig_rescan_k && m_multisig_rescan_info,
-                  error::wallet_internal_error, "NULL m_multisig_rescan_k");
+                  error::wallet_internal_error, "nullptr m_multisig_rescan_k");
               if (m_multisig_rescan_info && m_multisig_rescan_info->front().size() >= m_transfers.size())
                 update_multisig_rescan_info(*m_multisig_rescan_k, *m_multisig_rescan_info, m_transfers.size() - 1);
             }
@@ -2798,7 +2798,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   {
     std::shared_ptr<tools::Notify> tx_notify = m_tx_notify;
     if (tx_notify)
-      tx_notify->notify("%s", epee::string_tools::pod_to_hex(txid).c_str(), NULL);
+      tx_notify->notify("%s", epee::string_tools::pod_to_hex(txid).c_str(), nullptr);
   }
 }
 //----------------------------------------------------------------------------------------------------
@@ -3329,7 +3329,7 @@ void wallet2::pull_and_parse_next_blocks(bool first, bool try_incremental, uint6
 {
   error = false;
   last = false;
-  exception = NULL;
+  exception = nullptr;
 
   try
   {
@@ -3755,7 +3755,7 @@ void wallet2::update_pool_state_from_pool_data(bool incremental, const std::vect
 void wallet2::process_pool_state(const std::vector<std::tuple<cryptonote::transaction, crypto::hash, bool>> &txs)
 {
   MTRACE("process_pool_state start");
-  const time_t now = time(NULL);
+  const time_t now = time(nullptr);
   for (const auto &e: txs)
   {
     const cryptonote::transaction &tx = std::get<0>(e);
@@ -3968,7 +3968,7 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
     {
       // pull the next set of blocks while we're processing the current one
       error = false;
-      exception = NULL;
+      exception = nullptr;
       next_blocks.clear();
       next_parsed_blocks.clear();
       added_blocks = 0;
@@ -6515,7 +6515,7 @@ std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> wallet2::
 {
   std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> amount_per_subaddr;
   const uint64_t blockchain_height = get_blockchain_current_height();
-  const uint64_t now = time(NULL);
+  const uint64_t now = time(nullptr);
   for(const transfer_details& td: m_transfers)
   {
     if (td.amount() > m_ignore_outputs_above || td.amount() < m_ignore_outputs_below)
@@ -6571,7 +6571,7 @@ uint64_t wallet2::unlocked_balance_all(bool strict, uint64_t *blocks_to_unlock, 
   for (uint32_t index_major = 0; index_major < get_num_subaddress_accounts(); ++index_major)
   {
     uint64_t local_blocks_to_unlock, local_time_to_unlock;
-    r += unlocked_balance(index_major, strict, blocks_to_unlock ? &local_blocks_to_unlock : NULL, time_to_unlock ? &local_time_to_unlock : NULL);
+    r += unlocked_balance(index_major, strict, blocks_to_unlock ? &local_blocks_to_unlock : nullptr, time_to_unlock ? &local_time_to_unlock : nullptr);
     if (blocks_to_unlock)
       *blocks_to_unlock = std::max(*blocks_to_unlock, local_blocks_to_unlock);
     if (time_to_unlock)
@@ -6753,7 +6753,7 @@ bool wallet2::is_tx_spendtime_unlocked(uint64_t unlock_time, uint64_t block_heig
     //interpret as time
     uint64_t adjusted_time;
     try { adjusted_time = get_daemon_adjusted_time(); }
-    catch(...) { adjusted_time = time(NULL); } // use local time if no daemon to report blockchain time
+    catch(...) { adjusted_time = time(nullptr); } // use local time if no daemon to report blockchain time
     // XXX: this needs to be fast, so we'd need to get the starting heights
     // from the daemon to be correct once voting kicks in
     uint64_t v2height = m_nettype == TESTNET ? 624634 : m_nettype == STAGENET ? 32000  : 1009827;
@@ -6931,12 +6931,12 @@ void wallet2::add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t amo
     utd.m_amount_out += d.amount;
   utd.m_amount_out += change_amount; // dests does not contain change
   utd.m_change = change_amount;
-  utd.m_sent_time = time(NULL);
+  utd.m_sent_time = time(nullptr);
   utd.m_tx = (const cryptonote::transaction_prefix&)tx;
   utd.m_dests = dests;
   utd.m_payment_id = payment_id;
   utd.m_state = wallet2::unconfirmed_transfer_details::pending;
-  utd.m_timestamp = time(NULL);
+  utd.m_timestamp = time(nullptr);
   utd.m_subaddr_account = subaddr_account;
   utd.m_subaddr_indices = subaddr_indices;
   for (const auto &in: tx.vin)
@@ -8599,7 +8599,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       auto end = std::unique(req_t.amounts.begin(), req_t.amounts.end());
       req_t.amounts.resize(std::distance(req_t.amounts.begin(), end));
       req_t.unlocked = true;
-      req_t.recent_cutoff = time(NULL) - RECENT_OUTPUT_ZONE;
+      req_t.recent_cutoff = time(nullptr) - RECENT_OUTPUT_ZONE;
 
       {
         const boost::lock_guard<boost::recursive_mutex> lock{m_daemon_rpc_mutex};
@@ -10881,7 +10881,7 @@ uint64_t wallet2::cold_key_image_sync(uint64_t &spent, uint64_t &unspent) {
 
   // Call COMMAND_RPC_IS_KEY_IMAGE_SPENT only if daemon is trusted.
   uint64_t import_res = import_key_images(ski, 0, spent, unspent, is_trusted_daemon());
-  m_device_last_key_image_sync = time(NULL);
+  m_device_last_key_image_sync = time(nullptr);
 
   return import_res;
 }
@@ -12274,7 +12274,7 @@ uint64_t wallet2::get_approximate_blockchain_height() const
   // avg seconds per block
   const int seconds_per_block = DIFFICULTY_TARGET_V2;
   // Calculated blockchain height
-  uint64_t approx_blockchain_height = fork_block + (time(NULL) - fork_time)/seconds_per_block;
+  uint64_t approx_blockchain_height = fork_block + (time(nullptr) - fork_time)/seconds_per_block;
   // testnet and stagenet got some huge rollbacks, so the estimation is way off
   static const uint64_t approximate_rolled_back_blocks = m_nettype == TESTNET ? 342100 : 30000;
   if ((m_nettype == TESTNET || m_nettype == STAGENET) && approx_blockchain_height > approximate_rolled_back_blocks)
@@ -13768,12 +13768,12 @@ size_t wallet2::import_multisig(std::vector<cryptonote::blobdata> blobs)
   }
   catch (...)
   {
-    m_multisig_rescan_info = NULL;
-    m_multisig_rescan_k = NULL;
+    m_multisig_rescan_info = nullptr;
+    m_multisig_rescan_k = nullptr;
     throw;
   }
-  m_multisig_rescan_info = NULL;
-  m_multisig_rescan_k = NULL;
+  m_multisig_rescan_info = nullptr;
+  m_multisig_rescan_k = nullptr;
 
   return n_outputs;
 }
@@ -14316,9 +14316,9 @@ bool wallet2::load_from_file(const std::string& path_to_file, std::string& targe
   // to avoid reading the file from disk twice.
   BIO* b = BIO_new_mem_buf((const void*) data.data(), data.length());
 
-  char *name = NULL;
-  char *header = NULL;
-  unsigned char *openssl_data = NULL;
+  char *name = nullptr;
+  char *header = nullptr;
+  unsigned char *openssl_data = nullptr;
   long len = 0;
 
   // Save the result b/c we need to free the data before returning success/failure.

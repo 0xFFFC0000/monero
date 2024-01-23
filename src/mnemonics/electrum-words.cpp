@@ -107,7 +107,7 @@ namespace
       Language::Singleton<Language::Lojban>::instance(),
       Language::Singleton<Language::EnglishOld>::instance()
     });
-    Language::Base *fallback = NULL;
+    Language::Base *fallback = nullptr;
 
     std::vector<epee::wipeable_string>::const_iterator it2;
     matched_indices.reserve(seed.size());
@@ -384,7 +384,7 @@ namespace crypto
 
       if (len % 4 != 0 || len == 0) return false;
 
-      const Language::Base *language = NULL;
+      const Language::Base *language = nullptr;
       const std::vector<const Language::Base*> language_list = crypto::ElectrumWords::get_language_list();
       for (const Language::Base *l: language_list)
       {

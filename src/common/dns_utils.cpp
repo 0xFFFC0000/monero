@@ -106,7 +106,7 @@ get_builtin_ds(void)
   static const char * const ds[] =
   {
     ". IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D\n",
-    NULL
+    nullptr
   };
   return ds;
 }
@@ -254,8 +254,8 @@ DNSResolver::DNSResolver() : m_data(new DNSResolverData())
   }
   else {
     // look for "/etc/resolv.conf" and "/etc/hosts" or platform equivalent
-    ub_ctx_resolvconf(m_data->m_ub_context, NULL);
-    ub_ctx_hosts(m_data->m_ub_context, NULL);
+    ub_ctx_resolvconf(m_data->m_ub_context, nullptr);
+    ub_ctx_hosts(m_data->m_ub_context, nullptr);
   }
 
   add_anchors(m_data->m_ub_context);
@@ -286,7 +286,7 @@ DNSResolver::~DNSResolver()
 {
   if (m_data)
   {
-    if (m_data->m_ub_context != NULL)
+    if (m_data->m_ub_context != nullptr)
     {
       ub_ctx_delete(m_data->m_ub_context);
     }
@@ -321,7 +321,7 @@ std::vector<std::string> DNSResolver::get_record(const std::string& url, int rec
     }
     if (result->havedata)
     {
-      for (size_t i=0; result->data[i] != NULL; i++)
+      for (size_t i=0; result->data[i] != nullptr; i++)
       {
         boost::optional<std::string> res = (*reader)(result->data[i], result->len[i]);
         if (res)

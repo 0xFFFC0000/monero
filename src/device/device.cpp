@@ -46,7 +46,7 @@ namespace hw {
       if (clear)
       {
         delete registry;
-        registry = NULL;
+        registry = nullptr;
       }
       return registry;
     }

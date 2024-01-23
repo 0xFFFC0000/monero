@@ -74,7 +74,7 @@ public:
   };
 
   // Submit a task to the pool. The waiter pointer may be
-  // NULL if the caller doesn't care to wait for the
+  // nullptr if the caller doesn't care to wait for the
   // task to finish.
   void submit(waiter *waiter, std::function<void()> f, bool leaf = false);
 

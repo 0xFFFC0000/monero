@@ -206,7 +206,7 @@ public:
 
   virtual void unlock();
 
-  virtual bool block_exists(const crypto::hash& h, uint64_t *height = NULL) const;
+  virtual bool block_exists(const crypto::hash& h, uint64_t *height = nullptr) const;
 
   virtual uint64_t get_block_height(const crypto::hash& h) const;
 
@@ -244,7 +244,7 @@ public:
 
   virtual std::vector<crypto::hash> get_hashes_range(const uint64_t& h1, const uint64_t& h2) const;
 
-  virtual crypto::hash top_block_hash(uint64_t *block_height = NULL) const;
+  virtual crypto::hash top_block_hash(uint64_t *block_height = nullptr) const;
 
   virtual block get_top_block() const;
 

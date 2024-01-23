@@ -443,7 +443,7 @@ namespace hw {
 
 
         /* ---------------------------------------------------------- */
-        static device_default *default_core_device = NULL;
+        static device_default *default_core_device = nullptr;
         void register_all(std::map<std::string, std::unique_ptr<device>> &registry) {
             if (!default_core_device) {
                 default_core_device = new device_default();

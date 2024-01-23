@@ -281,16 +281,16 @@ namespace cryptonote
     if (m_checkpoints_updating.test_and_set()) return true;
 
     bool res = true;
-    if (!skip_dns && time(NULL) - m_last_dns_checkpoints_update >= 3600)
+    if (!skip_dns && time(nullptr) - m_last_dns_checkpoints_update >= 3600)
     {
       res = m_blockchain_storage.update_checkpoints(m_checkpoints_path, true);
-      m_last_dns_checkpoints_update = time(NULL);
-      m_last_json_checkpoints_update = time(NULL);
+      m_last_dns_checkpoints_update = time(nullptr);
+      m_last_json_checkpoints_update = time(nullptr);
     }
-    else if (time(NULL) - m_last_json_checkpoints_update >= 600)
+    else if (time(nullptr) - m_last_json_checkpoints_update >= 600)
     {
       res = m_blockchain_storage.update_checkpoints(m_checkpoints_path, false);
-      m_last_json_checkpoints_update = time(NULL);
+      m_last_json_checkpoints_update = time(nullptr);
     }
 
     m_checkpoints_updating.clear();
@@ -462,7 +462,7 @@ namespace cryptonote
     start_time = std::time(nullptr);
 
     const bool regtest = command_line::get_arg(vm, arg_regtest_on);
-    if (test_options != NULL || regtest)
+    if (test_options != nullptr || regtest)
     {
       m_nettype = FAKECHAIN;
     }
@@ -505,7 +505,7 @@ namespace cryptonote
     catch (...) { }
 
     std::unique_ptr<BlockchainDB> db(new_db());
-    if (db == NULL)
+    if (db == nullptr)
     {
       LOG_ERROR("Failed to initialize a database");
       return false;
@@ -635,7 +635,7 @@ namespace cryptonote
           void operator()(std::uint64_t, epee::span<const block> blocks) const
           {
             for (const block& bl : blocks)
-              cmdline.notify("%s", epee::string_tools::pod_to_hex(get_block_hash(bl)).c_str(), NULL);
+              cmdline.notify("%s", epee::string_tools::pod_to_hex(get_block_hash(bl)).c_str(), nullptr);
           }
         };
 
@@ -2039,7 +2039,7 @@ namespace cryptonote
     static constexpr double threshold = 1. / (864000 / DIFFICULTY_TARGET_V2); // one false positive every 10 days
     static constexpr unsigned int max_blocks_checked = 150;
 
-    const time_t now = time(NULL);
+    const time_t now = time(nullptr);
     const std::vector<time_t> timestamps = m_blockchain_storage.get_last_block_timestamps(max_blocks_checked);
 
     static const unsigned int seconds[] = { 5400, 3600, 1800, 1200, 600 };
@@ -2058,7 +2058,7 @@ namespace cryptonote
         if (block_rate_notify)
         {
           auto expected = seconds[n] / DIFFICULTY_TARGET_V2;
-          block_rate_notify->notify("%t", std::to_string(seconds[n] / 60).c_str(), "%b", std::to_string(b).c_str(), "%e", std::to_string(expected).c_str(), NULL);
+          block_rate_notify->notify("%t", std::to_string(seconds[n] / 60).c_str(), "%b", std::to_string(b).c_str(), "%e", std::to_string(expected).c_str(), nullptr);
         }
 
         break; // no need to look further

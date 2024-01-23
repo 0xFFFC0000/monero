@@ -64,7 +64,7 @@ namespace cryptonote
     top(crypto::null_hash),
     previous_top(crypto::null_hash),
     credits(0),
-    update_time(time(NULL)),
+    update_time(time(nullptr)),
     last_request_timestamp(0),
     block_template_update_time(0),
     credits_total(0),
@@ -133,7 +133,7 @@ namespace cryptonote
   {
     boost::lock_guard<boost::mutex> lock(mutex);
     client_info &info = m_client_info[client]; // creates if not found
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     bool need_template = top != info.top || now >= info.block_template_update_time + STALE_THRESHOLD;
     if (need_template)
     {
@@ -208,7 +208,7 @@ namespace cryptonote
       return false;
     }
 
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     if (!is_current)
     {
       if (now > info.update_time + STALE_THRESHOLD)
@@ -369,7 +369,7 @@ namespace cryptonote
   {
     boost::lock_guard<boost::mutex> lock(mutex);
     unsigned int count = 0;
-    const time_t now = time(NULL);
+    const time_t now = time(nullptr);
     time_t seconds0 = seconds;
     if (seconds == 0)
     {
@@ -396,7 +396,7 @@ namespace cryptonote
   uint64_t rpc_payment::get_hashes(unsigned int seconds) const
   {
     boost::lock_guard<boost::mutex> lock(mutex);
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     uint64_t hashes = 0;
     for (std::map<uint64_t, uint64_t>::const_reverse_iterator i = m_hashrate.crbegin(); i != m_hashrate.crend(); ++i)
     {
@@ -410,7 +410,7 @@ namespace cryptonote
   void rpc_payment::prune_hashrate(unsigned int seconds)
   {
     boost::lock_guard<boost::mutex> lock(mutex);
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     std::map<uint64_t, uint64_t>::iterator i;
     for (i = m_hashrate.begin(); i != m_hashrate.end(); ++i)
     {

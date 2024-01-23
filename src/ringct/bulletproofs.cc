@@ -89,7 +89,7 @@ static inline rct::key multiexp(const std::vector<MultiexpData> &data, size_t Hi
     return HiGi_size <= 232 && data.size() == HiGi_size ? straus(data, straus_HiGi_cache, 0) : pippenger(data, pippenger_HiGi_cache, HiGi_size, get_pippenger_c(data.size()));
   }
   else
-    return data.size() <= 95 ? straus(data, NULL, 0) : pippenger(data, NULL, 0, get_pippenger_c(data.size()));
+    return data.size() <= 95 ? straus(data, nullptr, 0) : pippenger(data, nullptr, 0, get_pippenger_c(data.size()));
 }
 
 static inline bool is_reduced(const rct::key &scalar)
@@ -754,7 +754,7 @@ try_again:
     if (nprime > 1)
     {
       PERF_TIMER_START_BP(PROVE_hadamard2);
-      hadamard_fold(Gprime, NULL, winv, w[round]);
+      hadamard_fold(Gprime, nullptr, winv, w[round]);
       hadamard_fold(Hprime, scale, w[round], winv);
       PERF_TIMER_STOP_BP(PROVE_hadamard2);
     }
@@ -765,7 +765,7 @@ try_again:
     bprime = vector_add(vector_scalar(slice(bprime, 0, nprime), winv), vector_scalar(slice(bprime, nprime, bprime.size()), w[round]));
     PERF_TIMER_STOP_BP(PROVE_prime);
 
-    scale = NULL;
+    scale = nullptr;
     ++round;
   }
   PERF_TIMER_STOP_BP(PROVE_step4);

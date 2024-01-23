@@ -59,14 +59,14 @@ namespace hw {
         std::wcsrtombs(&error_str[0], &error_wstr, error_str.size(), &state);
         return error_str;
       }
-      return std::string("NULL device");
+      return std::string("nullptr device");
     }
 
     static std::string safe_hid_path(const hid_device_info *hwdev_info) {
       if (hwdev_info && hwdev_info->path) {
         return  std::string(hwdev_info->path);
       }
-      return std::string("NULL path");
+      return std::string("nullptr path");
     }
 
     device_io_hid::device_io_hid(unsigned short c, unsigned char t, unsigned int ps, unsigned int to) : 
@@ -76,7 +76,7 @@ namespace hw {
       timeout(to),
       usb_vid(0),
       usb_pid(0),
-      usb_device(NULL) {
+      usb_device(nullptr) {
     }
 
     device_io_hid::device_io_hid() : device_io_hid(DEFAULT_CHANNEL, DEFAULT_TAG, DEFAULT_PACKET_SIZE, DEFAULT_TIMEOUT) {
@@ -157,9 +157,9 @@ namespace hw {
       hwdev_info_list = hid_enumerate(vid, pid);
       if (!hwdev_info_list) {
         MDEBUG("Unable to enumerate device "+std::to_string(vid)+":"+std::to_string(vid)+  ": "+ safe_hid_error(this->usb_device));
-        return NULL;
+        return nullptr;
       }
-      hwdev = NULL;
+      hwdev = nullptr;
       if (hid_device_info *device = find_device(hwdev_info_list, interface_number, usage_page)) {
         hwdev = hid_open_path(device->path);
       }
@@ -173,7 +173,7 @@ namespace hw {
 
 
     bool device_io_hid::connected() const {
-      return this->usb_device != NULL;
+      return this->usb_device != nullptr;
     }
 
     int device_io_hid::exchange(unsigned char *command, unsigned int cmd_len, unsigned char *response, unsigned int max_resp_len, bool user_input)  {
@@ -234,7 +234,7 @@ namespace hw {
       }
       this->usb_vid = 0;
       this->usb_pid = 0;
-      this->usb_device = NULL;
+      this->usb_device = nullptr;
     }
 
     void device_io_hid::release()  {
@@ -303,7 +303,7 @@ namespace hw {
       unsigned int val;
 
       //end?
-      if ((data == NULL) || (data_len < 7 + 5)) { 
+      if ((data == nullptr) || (data_len < 7 + 5)) { 
         return 0;
       }
 

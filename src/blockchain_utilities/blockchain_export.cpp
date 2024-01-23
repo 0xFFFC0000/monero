@@ -133,7 +133,7 @@ int main(int argc, char* argv[])
   std::unique_ptr<BlockchainAndPool> core_storage = std::make_unique<BlockchainAndPool>();
 
   BlockchainDB* db = new_db();
-  if (db == NULL)
+  if (db == nullptr)
   {
     LOG_ERROR("Failed to initialize a database");
     throw std::runtime_error("Failed to initialize a database");
@@ -169,12 +169,12 @@ int main(int argc, char* argv[])
   if (opt_blocks_dat)
   {
     BlocksdatFile blocksdat;
-    r = blocksdat.store_blockchain_raw(&core_storage->blockchain, NULL, output_file_path, block_stop);
+    r = blocksdat.store_blockchain_raw(&core_storage->blockchain, nullptr, output_file_path, block_stop);
   }
   else
   {
     BootstrapFile bootstrap;
-    r = bootstrap.store_blockchain_raw(&core_storage->blockchain, NULL, output_file_path, block_start, block_stop);
+    r = bootstrap.store_blockchain_raw(&core_storage->blockchain, nullptr, output_file_path, block_start, block_stop);
   }
   CHECK_AND_ASSERT_MES(r, 1, "Failed to export blockchain raw data");
   LOG_PRINT_L0("Blockchain raw data exported OK");

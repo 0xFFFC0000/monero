@@ -418,7 +418,7 @@ namespace cryptonote
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::check_payment(const std::string &client_message, uint64_t payment, const std::string &rpc, bool same_ts, std::string &message, uint64_t &credits, std::string &top_hash)
   {
-    if (m_rpc_payment == NULL)
+    if (m_rpc_payment == nullptr)
     {
       credits = 0;
       return true;
@@ -625,7 +625,7 @@ namespace cryptonote
 
     CHECK_PAYMENT(req, res, 1);
 
-    res.daemon_time = (uint64_t)time(NULL);
+    res.daemon_time = (uint64_t)time(nullptr);
     // Always set daemon time, and set it early rather than late, as delivering some incremental pool
     // info twice because of slightly overlapping time intervals is no problem, whereas producing gaps
     // and never delivering something is
@@ -655,7 +655,7 @@ namespace cryptonote
     if (get_pool)
     {
       const bool restricted = m_restricted && ctx;
-      const bool request_has_rpc_origin = ctx != NULL;
+      const bool request_has_rpc_origin = ctx != nullptr;
       const bool allow_sensitive = !request_has_rpc_origin || !restricted;
       const size_t max_tx_count = restricted ? RESTRICTED_TRANSACTIONS_COUNT : std::numeric_limits<size_t>::max();
 
@@ -866,7 +866,7 @@ namespace cryptonote
     CHECK_PAYMENT(req, res, 1);
 
     res.start_height = req.start_height;
-    if(!m_core.get_blockchain_storage().find_blockchain_supplement(req.block_ids, res.m_block_ids, NULL, res.start_height, res.current_height, false))
+    if(!m_core.get_blockchain_storage().find_blockchain_supplement(req.block_ids, res.m_block_ids, nullptr, res.start_height, res.current_height, false))
     {
       res.status = "Failed";
       add_host_fail(ctx);
@@ -984,7 +984,7 @@ namespace cryptonote
       return ok;
 
     const bool restricted = m_restricted && ctx;
-    const bool request_has_rpc_origin = ctx != NULL;
+    const bool request_has_rpc_origin = ctx != nullptr;
 
     if (restricted && req.txs_hashes.size() > RESTRICTED_TRANSACTIONS_COUNT)
     {
@@ -1234,7 +1234,7 @@ namespace cryptonote
       return ok;
 
     const bool restricted = m_restricted && ctx;
-    const bool request_has_rpc_origin = ctx != NULL;
+    const bool request_has_rpc_origin = ctx != nullptr;
 
     if (restricted && req.key_images.size() > RESTRICTED_SPENT_KEY_IMAGES_COUNT)
     {
@@ -1549,7 +1549,7 @@ namespace cryptonote
 
     for (auto & entry : white_list)
     {
-      if (!req.include_blocked && m_p2p.is_host_blocked(entry.adr, NULL))
+      if (!req.include_blocked && m_p2p.is_host_blocked(entry.adr, nullptr))
         continue;
       if (entry.adr.get_type_id() == epee::net_utils::ipv4_network_address::get_type_id())
         res.white_list.emplace_back(entry.id, entry.adr.as<epee::net_utils::ipv4_network_address>().ip(),
@@ -1563,7 +1563,7 @@ namespace cryptonote
 
     for (auto & entry : gray_list)
     {
-      if (!req.include_blocked && m_p2p.is_host_blocked(entry.adr, NULL))
+      if (!req.include_blocked && m_p2p.is_host_blocked(entry.adr, nullptr))
         continue;
       if (entry.adr.get_type_id() == epee::net_utils::ipv4_network_address::get_type_id())
         res.gray_list.emplace_back(entry.id, entry.adr.as<epee::net_utils::ipv4_network_address>().ip(),
@@ -1668,7 +1668,7 @@ namespace cryptonote
     CHECK_PAYMENT(req, res, 1);
 
     const bool restricted = m_restricted && ctx;
-    const bool request_has_rpc_origin = ctx != NULL;
+    const bool request_has_rpc_origin = ctx != nullptr;
     const bool allow_sensitive = !request_has_rpc_origin || !restricted;
 
     size_t n_txes = m_core.get_pool_transactions_count(allow_sensitive);
@@ -1694,7 +1694,7 @@ namespace cryptonote
     CHECK_PAYMENT(req, res, 1);
 
     const bool restricted = m_restricted && ctx;
-    const bool request_has_rpc_origin = ctx != NULL;
+    const bool request_has_rpc_origin = ctx != nullptr;
     const bool allow_sensitive = !request_has_rpc_origin || !restricted;
 
     size_t n_txes = m_core.get_pool_transactions_count(allow_sensitive);
@@ -1718,7 +1718,7 @@ namespace cryptonote
     CHECK_PAYMENT(req, res, 1);
 
     const bool restricted = m_restricted && ctx;
-    const bool request_has_rpc_origin = ctx != NULL;
+    const bool request_has_rpc_origin = ctx != nullptr;
     const bool allow_sensitive = !request_has_rpc_origin || !restricted;
 
     size_t n_txes = m_core.get_pool_transactions_count(allow_sensitive);
@@ -1746,7 +1746,7 @@ namespace cryptonote
     CHECK_PAYMENT_MIN1(req, res, COST_PER_TX_POOL_STATS, false);
 
     const bool restricted = m_restricted && ctx;
-    const bool request_has_rpc_origin = ctx != NULL;
+    const bool request_has_rpc_origin = ctx != nullptr;
     m_core.get_pool_transaction_stats(res.pool_stats, !request_has_rpc_origin || !restricted);
 
     res.status = CORE_RPC_STATUS_OK;
@@ -1973,7 +1973,7 @@ namespace cryptonote
       }
     }
     crypto::hash seed_hash, next_seed_hash;
-    if (!get_block_template(info.address, req.prev_block.empty() ? NULL : &prev_block, blob_reserve, reserved_offset, wdiff, res.height, res.expected_reward, b, res.seed_height, seed_hash, next_seed_hash, error_resp))
+    if (!get_block_template(info.address, req.prev_block.empty() ? nullptr : &prev_block, blob_reserve, reserved_offset, wdiff, res.height, res.expected_reward, b, res.seed_height, seed_hash, next_seed_hash, error_resp))
       return false;
     if (b.major_version >= RX_BLOCK_VERSION)
     {
@@ -2062,7 +2062,7 @@ namespace cryptonote
     }
 
     cryptonote::get_block_longhash(&(m_core.get_blockchain_storage()), blockblob, pow_hash, req.height,
-      req.major_version, req.seed_hash.size() ? &seed_hash : NULL, 0);
+      req.major_version, req.seed_hash.size() ? &seed_hash : nullptr, 0);
     res = string_tools::pod_to_hex(pow_hash);
     return true;
   }
@@ -2947,7 +2947,7 @@ namespace cryptonote
     uint64_t cost = req.amounts.empty() ? COST_PER_FULL_OUTPUT_HISTOGRAM : (COST_PER_OUTPUT_HISTOGRAM * amounts);
     CHECK_PAYMENT_MIN1(req, res, cost, false);
 
-    if (restricted && req.recent_cutoff > 0 && req.recent_cutoff < (uint64_t)time(NULL) - OUTPUT_HISTOGRAM_RECENT_CUTOFF_RESTRICTION)
+    if (restricted && req.recent_cutoff > 0 && req.recent_cutoff < (uint64_t)time(nullptr) - OUTPUT_HISTOGRAM_RECENT_CUTOFF_RESTRICTION)
     {
       res.status = "Recent cutoff is too old";
       return true;
@@ -3488,7 +3488,7 @@ namespace cryptonote
       return r;
 
     // if RPC payment is not enabled
-    if (m_rpc_payment == NULL)
+    if (m_rpc_payment == nullptr)
     {
       res.diff = 0;
       res.credits_per_hash_found = 0;
@@ -3517,7 +3517,7 @@ namespace cryptonote
       cryptonote::difficulty_type difficulty;
       uint64_t height, expected_reward;
       size_t reserved_offset;
-      if (!get_block_template(m_rpc_payment->get_payment_address(), NULL, extra_nonce, reserved_offset, difficulty, height, expected_reward, b, seed_height, seed_hash, next_seed_hash, error_resp))
+      if (!get_block_template(m_rpc_payment->get_payment_address(), nullptr, extra_nonce, reserved_offset, difficulty, height, expected_reward, b, seed_height, seed_hash, next_seed_hash, error_resp))
         return false;
       return true;
     }, hashing_blob, res.seed_height, seed_hash, top_hash, res.diff, res.credits_per_hash_found, res.credits, res.cookie))
@@ -3638,7 +3638,7 @@ namespace cryptonote
       return r;
 
     // if RPC payment is not enabled
-    if (m_rpc_payment == NULL)
+    if (m_rpc_payment == nullptr)
     {
       res.status = "Payment not necessary";
       return true;
@@ -3697,7 +3697,7 @@ namespace cryptonote
       return r;
 
     // if RPC payment is not enabled
-    if (m_rpc_payment == NULL)
+    if (m_rpc_payment == nullptr)
     {
       res.status = "Payment not necessary";
       return true;

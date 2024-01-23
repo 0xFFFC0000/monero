@@ -255,7 +255,7 @@ bool message_transporter::post_request(const std::string &request, std::string &
   additional_params.push_back(std::make_pair("Authorization", auth_string));
 
   additional_params.push_back(std::make_pair("Content-Type", "application/xml; charset=utf-8"));
-  const epee::net_utils::http::http_response_info* response = NULL;
+  const epee::net_utils::http::http_response_info* response = nullptr;
   std::chrono::milliseconds timeout = std::chrono::seconds(15);
   bool r = m_http_client->invoke("/", "POST", request, timeout, std::addressof(response), std::move(additional_params));
   if (r)

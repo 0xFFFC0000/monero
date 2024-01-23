@@ -113,7 +113,7 @@ namespace
     }
     else
     {
-      const uint64_t now = time(NULL);
+      const uint64_t now = time(nullptr);
       if (unlock_time > now)
         entry.suggested_confirmations_threshold = std::max(entry.suggested_confirmations_threshold, (unlock_time - now + DIFFICULTY_TARGET_V2 - 1) / DIFFICULTY_TARGET_V2);
     }
@@ -128,7 +128,7 @@ namespace tools
   }
 
   //------------------------------------------------------------------------------------------------------------------------------
-  wallet_rpc_server::wallet_rpc_server():m_wallet(NULL), rpc_login_file(), m_stop(false), m_restricted(false), m_vm(NULL)
+  wallet_rpc_server::wallet_rpc_server():m_wallet(nullptr), rpc_login_file(), m_stop(false), m_restricted(false), m_vm(nullptr)
   {
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -184,7 +184,7 @@ namespace tools
       m_wallet->store();
       m_wallet->deinit();
       delete m_wallet;
-      m_wallet = NULL;
+      m_wallet = nullptr;
     }
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -1491,7 +1491,7 @@ namespace tools
     std::vector<tools::wallet2::pending_tx> ptx_vector;
     try
     {
-      bool r = m_wallet->parse_tx_from_str(blob, ptx_vector, NULL);
+      bool r = m_wallet->parse_tx_from_str(blob, ptx_vector, nullptr);
       if (!r)
       {
         er.code = WALLET_RPC_ERROR_CODE_BAD_SIGNED_TX_DATA;
@@ -3021,7 +3021,7 @@ namespace tools
         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + req.address;
       return false;
     }
-    if (!m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, req.description, info.is_subaddress))
+    if (!m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : nullptr, req.description, info.is_subaddress))
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Failed to add address book entry";
@@ -3084,7 +3084,7 @@ namespace tools
     if (req.set_description)
       entry.m_description = req.description;
 
-    if (!m_wallet->set_address_book_row(req.index, entry.m_address, req.set_address && entry.m_has_payment_id ? &entry.m_payment_id : NULL, entry.m_description, entry.m_is_subaddress))
+    if (!m_wallet->set_address_book_row(req.index, entry.m_address, req.set_address && entry.m_has_payment_id ? &entry.m_payment_id : nullptr, entry.m_description, entry.m_is_subaddress))
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Failed to edit address book entry";
@@ -3322,7 +3322,7 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
+      argv[3] = nullptr;
       vm2 = *m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
@@ -3419,7 +3419,7 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
+      argv[3] = nullptr;
       vm2 = *m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
@@ -3462,7 +3462,7 @@ namespace tools
       }
     }
     delete m_wallet;
-    m_wallet = NULL;
+    m_wallet = nullptr;
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -3646,7 +3646,7 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
+      argv[3] = nullptr;
       vm2 = *m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
@@ -3854,7 +3854,7 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
+      argv[3] = nullptr;
       vm2 = *m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
@@ -4243,7 +4243,7 @@ namespace tools
     }
 
     tools::wallet2::multisig_tx_set txs;
-    bool r = m_wallet->load_multisig_tx(blob, txs, NULL);
+    bool r = m_wallet->load_multisig_tx(blob, txs, nullptr);
     if (!r)
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_MULTISIG_TX_DATA;
@@ -4313,7 +4313,7 @@ namespace tools
     }
 
     tools::wallet2::multisig_tx_set txs;
-    bool r = m_wallet->load_multisig_tx(blob, txs, NULL);
+    bool r = m_wallet->load_multisig_tx(blob, txs, nullptr);
     if (!r)
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_MULTISIG_TX_DATA;
@@ -4572,7 +4572,7 @@ public:
 
       if (!wallet_dir.empty())
       {
-        wal = NULL;
+        wal = nullptr;
         goto just_dir;
       }
 

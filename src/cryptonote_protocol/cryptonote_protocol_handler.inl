@@ -221,14 +221,14 @@ namespace cryptonote
     m_p2p->for_each_connection([&](const connection_context& cntxt, nodetool::peerid_type peer_id, uint32_t support_flags)
     {
       bool local_ip = cntxt.m_remote_address.is_local();
-      auto connection_time = time(NULL) - cntxt.m_started;
+      auto connection_time = time(nullptr) - cntxt.m_started;
       ss << std::setw(30) << std::left << std::string(cntxt.m_is_income ? " [INC]":"[OUT]") +
         cntxt.m_remote_address.str()
         << std::setw(20) << nodetool::peerid_to_string(peer_id)
         << std::setw(20) << std::hex << support_flags
-        << std::setw(30) << std::to_string(cntxt.m_recv_cnt)+ "(" + std::to_string(time(NULL) - cntxt.m_last_recv) + ")" + "/" + std::to_string(cntxt.m_send_cnt) + "(" + std::to_string(time(NULL) - cntxt.m_last_send) + ")"
+        << std::setw(30) << std::to_string(cntxt.m_recv_cnt)+ "(" + std::to_string(time(nullptr) - cntxt.m_last_recv) + ")" + "/" + std::to_string(cntxt.m_send_cnt) + "(" + std::to_string(time(nullptr) - cntxt.m_last_send) + ")"
         << std::setw(25) << get_protocol_state_string(cntxt.m_state)
-        << std::setw(20) << std::to_string(time(NULL) - cntxt.m_started)
+        << std::setw(20) << std::to_string(time(nullptr) - cntxt.m_started)
         << std::setw(12) << std::fixed << (connection_time == 0 ? 0.0 : cntxt.m_recv_cnt / connection_time / 1024)
         << std::setw(14) << std::fixed << cntxt.m_current_speed_down / 1024
         << std::setw(10) << std::fixed << (connection_time == 0 ? 0.0 : cntxt.m_send_cnt / connection_time / 1024)
@@ -268,7 +268,7 @@ namespace cryptonote
     m_p2p->for_each_connection([&](const connection_context& cntxt, nodetool::peerid_type peer_id, uint32_t support_flags)
     {
       connection_info cnx;
-      auto timestamp = time(NULL);
+      auto timestamp = time(nullptr);
 
       cnx.incoming = cntxt.m_is_income ? true : false;
 
@@ -306,7 +306,7 @@ namespace cryptonote
       cnx.localhost = cntxt.m_remote_address.is_loopback();
       cnx.local_ip = cntxt.m_remote_address.is_local();
 
-      auto connection_time = time(NULL) - cntxt.m_started;
+      auto connection_time = time(nullptr) - cntxt.m_started;
       if (connection_time == 0)
       {
         cnx.avg_download = 0;
@@ -508,7 +508,7 @@ namespace cryptonote
     }
 
     block_verification_context bvc = {};
-    m_core.handle_incoming_block(arg.b.block, pblocks.empty() ? NULL : &pblocks[0], bvc); // got block from handle_notify_new_block
+    m_core.handle_incoming_block(arg.b.block, pblocks.empty() ? nullptr : &pblocks[0], bvc); // got block from handle_notify_new_block
     if (!m_core.cleanup_handle_incoming_blocks(true))
     {
       LOG_PRINT_CCONTEXT_L0("Failure in cleanup_handle_incoming_blocks");
@@ -790,7 +790,7 @@ namespace cryptonote
         }
           
         block_verification_context bvc = {};
-        m_core.handle_incoming_block(arg.b.block, pblocks.empty() ? NULL : &pblocks[0], bvc); // got block from handle_notify_new_block
+        m_core.handle_incoming_block(arg.b.block, pblocks.empty() ? nullptr : &pblocks[0], bvc); // got block from handle_notify_new_block
         if (!m_core.cleanup_handle_incoming_blocks(true))
         {
           LOG_PRINT_CCONTEXT_L0("Failure in cleanup_handle_incoming_blocks");
@@ -1598,7 +1598,7 @@ namespace cryptonote
             TIME_MEASURE_START(block_process_time);
             block_verification_context bvc = {};
 
-            m_core.handle_incoming_block(block_entry.block, pblocks.empty() ? NULL : &pblocks[blockidx], bvc, false); // <--- process block
+            m_core.handle_incoming_block(block_entry.block, pblocks.empty() ? nullptr : &pblocks[blockidx], bvc, false); // <--- process block
 
             if(bvc.m_verifivation_failed)
             {
@@ -1923,7 +1923,7 @@ skip:
         {
           bool download = false;
           if (m_p2p->for_connection(connection_id, [&](cryptonote_connection_context& ctx, nodetool::peerid_type peer_id, uint32_t f)->bool{
-            const time_t nowt = time(NULL);
+            const time_t nowt = time(nullptr);
             const time_t time_since_last_recv = nowt - ctx.m_last_recv;
             const float last_activity = std::min((float)time_since_last_recv, dt/1e6f);
             const bool stalled = last_activity > LAST_ACTIVITY_STALL_THRESHOLD;
