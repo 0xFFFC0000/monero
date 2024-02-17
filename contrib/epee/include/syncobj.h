@@ -36,6 +36,7 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
 #include <boost/thread/thread.hpp>
+#include <misc_log_ex.h>
 
 namespace epee
 {
@@ -147,6 +148,88 @@ namespace epee
         m_unlocked = true;
       }
     }
+  };
+  
+
+  struct reader_writer_lock {
+
+    static const std::unique_ptr<reader_writer_lock> 
+    createReader(boost::shared_mutex& read_write_mutex) noexcept {
+      auto r_lock = std::make_unique<reader_writer_lock>(read_write_mutex);
+      r_lock->start_read();
+      return r_lock;
+    }
+
+    static const std::unique_ptr<reader_writer_lock> 
+    createWriter(boost::shared_mutex& read_write_mutex) noexcept {
+      auto rw_lock = std::make_unique<reader_writer_lock>(read_write_mutex);
+      rw_lock->start_write();
+      return rw_lock;
+    }
+
+    ~reader_writer_lock() noexcept {
+      if (write_lock.owns_lock()) {
+        write_lock.release();
+      }      
+      else if (read_lock.owns_lock()) {
+        read_lock.release();
+      }
+    };
+
+    void start_read() noexcept {
+      read_lock.lock();
+    }
+
+    void end_read() noexcept {
+      read_lock.unlock();
+      condition.notify_all();
+    }
+
+    void start_write() noexcept {
+      lock();
+    }
+
+    void end_write() noexcept {
+      write_lock.unlock();
+      condition.notify_all();
+    }
+
+    bool is_read_locked() noexcept {
+      return read_lock.owns_lock() || write_lock.owns_lock();
+    }
+
+    bool is_write_locked() noexcept {
+      return write_lock.owns_lock();
+    }
+
+    reader_writer_lock(boost::shared_mutex& read_write_mutex) noexcept :
+    read_lock(read_write_mutex, boost::defer_lock),
+    write_lock(read_write_mutex, boost::defer_lock) {}
+
+    reader_writer_lock(reader_writer_lock&) = delete;
+    reader_writer_lock operator=(reader_writer_lock&) = delete;
+
+  private:
+
+    void lock() noexcept {
+      do {  
+        boost::unique_lock<boost::mutex> lock(t_mutex);
+        try {
+          if(write_lock.try_lock()) {
+            return; 
+          }
+        } catch (std::system_error& se) {
+          MDEBUG("Failed to lock : " << se.what());
+        }
+        condition.wait(lock);
+      } while(true);
+    }
+
+    boost::shared_lock<boost::shared_mutex> read_lock;
+    boost::unique_lock<boost::shared_mutex> write_lock;
+    boost::mutex t_mutex; // write_lock and owner_id should always be consistent
+    boost::condition_variable_any condition;
+
   };
 
 

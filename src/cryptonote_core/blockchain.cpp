@@ -113,21 +113,20 @@ Blockchain::~Blockchain()
 bool Blockchain::have_tx(const crypto::hash &id) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  // WARNING: this function does not take m_blockchain_lock, and thus should only call read only
-  // m_db functions which do not depend on one another (ie, no getheight + gethash(height-1), as
-  // well as not accessing class members, even read only (ie, m_invalid_blocks). The caller must
-  // lock if it is otherwise needed.
+  auto r_lock = epee::reader_writer_lock::createReader(read_write_mutex);
+  return have_tx(id, r_lock);
+}
+bool Blockchain::have_tx(const crypto::hash &id, const std::unique_ptr<epee::reader_writer_lock>& lock) const
+{
+  CHECK_AND_ASSERT_MES2(lock->is_read_locked(), "Calling have_tx without having read lock on blockchain.");
   return m_db->tx_exists(id);
 }
 //------------------------------------------------------------------
-bool Blockchain::have_tx_keyimg_as_spent(const crypto::key_image &key_im) const
+bool Blockchain::have_tx_keyimg_as_spent(const crypto::key_image &key_im, const std::unique_ptr<epee::reader_writer_lock>& lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  // WARNING: this function does not take m_blockchain_lock, and thus should only call read only
-  // m_db functions which do not depend on one another (ie, no getheight + gethash(height-1), as
-  // well as not accessing class members, even read only (ie, m_invalid_blocks). The caller must
-  // lock if it is otherwise needed.
-  return  m_db->has_key_image(key_im);
+  if (lock)
+    return m_db->has_key_image(key_im);
 }
 //------------------------------------------------------------------
 // This function makes sure that each "input" in an input (mixins) exists

@@ -260,10 +260,12 @@ namespace cryptonote
      * @brief search the blockchain for a transaction by hash
      *
      * @param id the hash to search for
+     * @param lock a read lock to interact with blockchain
      *
      * @return true if the tx exists, else false
      */
     bool have_tx(const crypto::hash &id) const;
+    bool have_tx(const crypto::hash &id, const std::unique_ptr<epee::reader_writer_lock>& lock) const;
 
     /**
      * @brief check if any key image in a transaction has already been spent
@@ -286,7 +288,7 @@ namespace cryptonote
      *
      * @return true if the key image is already spent in the blockchain, else false
      */
-    bool have_tx_keyimg_as_spent(const crypto::key_image &key_im) const;
+    bool have_tx_keyimg_as_spent(const crypto::key_image &key_im, const std::unique_ptr<epee::reader_writer_lock>& lock = nullptr) const;
 
     /**
      * @brief get the current height of the blockchain
@@ -1140,6 +1142,7 @@ namespace cryptonote
     tx_memory_pool& m_tx_pool;
 
     mutable epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
+    mutable boost::shared_mutex read_write_mutex;
 
     // main chain
     size_t m_current_block_cumul_weight_limit;
