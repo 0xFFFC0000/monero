@@ -30,7 +30,9 @@
 #ifndef __WINH_OBJ_H__
 #define __WINH_OBJ_H__
 
+#include <algorithm>
 #include <boost/chrono/duration.hpp>
+#include <boost/functional/hash/hash.hpp>
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/detail/thread.hpp>
 #include <boost/thread/locks.hpp>
@@ -38,6 +40,11 @@
 #include <boost/thread/recursive_mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <cstdint>
+#include <queue>
+#include <set>
+#include <utility>
+#include <functional>
+#include <vector>
 #include "misc_log_ex.h"
 #include "misc_language.h"
 
@@ -156,12 +163,12 @@ namespace epee
 
   struct reader_writer_lock {
 
-    reader_writer_lock() noexcept : 
-    write_mode(false),
-    read_mode(0) {};
+    reader_writer_lock() noexcept :
+    wait_queue(),
+    readers() {};
 
     bool start_read() noexcept {
-      if (have_write()) {
+      if (have_write() || have_read()) {
         return false;
       }
       lock_reader();
@@ -170,7 +177,6 @@ namespace epee
 
     void end_read() noexcept {
       unlock_reader();
-      condition.notify_all();
     }
 
     bool start_write() noexcept {
@@ -183,16 +189,16 @@ namespace epee
 
     void end_write() noexcept {
       unlock_writer();
-      condition.notify_all();
     }
 
     bool have_write() noexcept {
       boost::mutex::scoped_lock lock(internal_mutex);
-      if (write_mode
-          && writer_id == boost::this_thread::get_id()) {
-        return true;
-      }
-      return false;
+      return have_write(lock);
+    }
+
+    bool have_read() noexcept {
+      boost::mutex::scoped_lock lock(internal_mutex);
+      return have_read(lock);
     }
 
     ~reader_writer_lock() = default;
@@ -201,60 +207,109 @@ namespace epee
 
   private:
 
+    enum reader_writer_kind {
+      WRITER = 0,
+      READER = 1
+    };  
+
+    bool have_read(boost::mutex::scoped_lock& lock) noexcept {
+      return readers.find(boost::this_thread::get_id()) != readers.end();
+    }
+
+    bool have_write(boost::mutex::scoped_lock& lock) noexcept {
+      if (writer_id == boost::this_thread::get_id()) {
+        return true;
+      }
+      return false;
+    }
+
+    //  internal_mutex should be locked when calling this.
+    void wake_up() {
+      if (!wait_queue.size()) { 
+        return;
+      }
+
+      std::vector<std::reference_wrapper<boost::condition_variable>> wake_ups{};
+      while (wait_queue.size() && wait_queue.front().first == reader_writer_kind::READER) { // readers
+        auto thread_to_wake_up = wait_queue.front(); wait_queue.pop();
+        wake_ups.push_back(thread_to_wake_up.second);
+      }
+
+      if (!wake_ups.size()) { // writer
+        CHECK_AND_ASSERT_MES2(std::get<0>(wait_queue.front()) == reader_writer_kind::WRITER, " Waking up reader thread inside writer wake ups");
+        auto thread_to_wake_up = wait_queue.front(); wait_queue.pop();
+        wake_ups.push_back(thread_to_wake_up.second);
+      }
+
+      std::for_each(begin(wake_ups), end(wake_ups), 
+      [&] (std::reference_wrapper<boost::condition_variable> wait_condition_ref) {
+        wait_condition_ref.get().notify_one();
+      });
+    }
+
     void unlock_writer() noexcept {
-      CHECK_AND_ASSERT_MES2(write_mode && !read_mode, "Ending write transaction by " << boost::this_thread::get_id() << " while the lock is not in write mode");
       boost::mutex::scoped_lock lock(internal_mutex);      
+      CHECK_AND_ASSERT_MES2(!readers.size(), "Ending write transaction by " << boost::this_thread::get_id() << " while the are no  is not in write mode");
       rw_mutex.unlock();
-      write_mode = false;
       writer_id = boost::thread::id();
+      wake_up();      
     }
 
     void unlock_reader() noexcept {
-      CHECK_AND_ASSERT_MES2(read_mode && !write_mode, "Ending read transaction by " << boost::this_thread::get_id() << " while the lock is not in read mode");
       boost::mutex::scoped_lock lock(internal_mutex);      
+      CHECK_AND_ASSERT_MES2(readers.size(), "Ending read transaction by " << boost::this_thread::get_id() << " while the lock is not in read mode");
       rw_mutex.unlock_shared();
-      read_mode--;
-      if (rw_mutex.try_lock()) {
-        CHECK_AND_ASSERT_MES2(!read_mode, "Reader is not zero but goes to read_mode = 0 by " << boost::this_thread::get_id());
-        write_mode = false;
-        rw_mutex.unlock();
-      }
-      return; 
+      readers.erase(boost::this_thread::get_id());
+      if (!readers.size()) {
+        wake_up();
+      }      
+    }
+
+    void wait_in_queue(reader_writer_kind kind, boost::mutex::scoped_lock& lock) {
+      boost::condition_variable wait_condition;
+      wait_queue.push(std::make_pair(kind, std::reference_wrapper(wait_condition)));
+      wait_condition.wait(lock);
+    }
+
+    void entrance(reader_writer_kind kind) {
+      boost::mutex::scoped_lock lock(internal_mutex);
+      if (wait_queue.size()) { 
+        wait_in_queue(kind, lock);
+      }      
     }
 
     void lock_reader() noexcept {
-      CHECK_AND_ASSERT_MES2(read_mode < UINT32_MAX, "Maximum number of readers reached.");
+      entrance(reader_writer_kind::READER);
       do {  
-        boost::mutex::scoped_lock lock(internal_mutex);      
-        if(!write_mode && rw_mutex.try_lock_shared()) {
-          write_mode = false;
-          read_mode++;
-          return; 
+        boost::mutex::scoped_lock lock(internal_mutex);
+        if (!rw_mutex.try_lock_shared()) {
+          wait_in_queue(reader_writer_kind::READER, lock);
+          continue;
         }
-        condition.wait(lock);
+        readers.insert(boost::this_thread::get_id());
+        return; 
       } while(true);
     }
 
     void lock_and_change(boost::thread::id new_owner) noexcept {
+      entrance(reader_writer_kind::WRITER);
       do {  
-        boost::mutex::scoped_lock lock(internal_mutex);      
-        if (!read_mode && rw_mutex.try_lock()) {
-          writer_id = new_owner;
-          write_mode = true;
-          read_mode = 0;
-          return; 
+        boost::mutex::scoped_lock lock(internal_mutex);
+        if (!rw_mutex.try_lock()) {
+          wait_in_queue(reader_writer_kind::WRITER, lock);
+          continue;
         }
-        condition.wait(lock);
+        writer_id = new_owner;
+        return; 
       } while(true);
     }
 
     boost::mutex internal_mutex; // keep the data in RWLock consistent.
     boost::shared_mutex rw_mutex;
-    bool write_mode = false;
-    uint32_t read_mode = 0;
+    std::set<boost::thread::id> readers;    
     boost::thread::id writer_id;
-    boost::condition_variable condition;
-
+    typedef std::pair<reader_writer_kind, std::reference_wrapper<boost::condition_variable>> waiting_thread;
+    std::queue<waiting_thread> wait_queue;
   };
 
 #define RWLOCK(lock)                                                         \

@@ -135,6 +135,20 @@ void RUN_TEST() {
   });
 }
 
+TEST(reader_writer_lock_tests, test_3)
+{
+  calculate_parameters(3);
+  for(int i = 0; i < test_iteration; ++i)
+    RUN_TEST();
+}
+
+TEST(reader_writer_lock_tests, test_5)
+{
+  calculate_parameters(5);
+  for(int i = 0; i < test_iteration; ++i) 
+    RUN_TEST();
+}
+
 TEST(reader_writer_lock_tests, test_10)
 {
   calculate_parameters(10);
