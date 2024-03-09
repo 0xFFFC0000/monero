@@ -82,7 +82,7 @@ public:
     std::vector<std::string> findWallets(const std::string &path) override;
     std::string errorString() const override;
     void setDaemonAddress(const std::string &address) override;
-    bool connected(uint32_t *version = NULL) override;
+    bool connected(uint32_t *version = nullptr) override;
     uint64_t blockchainHeight() override;
     uint64_t blockchainTargetHeight() override;
     uint64_t networkDifficulty() override;

@@ -365,7 +365,7 @@ mdb_threadinfo::~mdb_threadinfo()
     mdb_txn_abort(m_ti_rtxn);
 }
 
-mdb_txn_safe::mdb_txn_safe(const bool check) : m_txn(NULL), m_tinfo(NULL), m_check(check)
+mdb_txn_safe::mdb_txn_safe(const bool check) : m_txn(nullptr), m_tinfo(nullptr), m_check(check)
 {
   if (check)
   {
@@ -388,7 +388,7 @@ mdb_txn_safe::~mdb_txn_safe()
   {
     if (m_batch_txn) // this is a batch txn and should have been handled before this point for safety
     {
-      LOG_PRINT_L0("WARNING: mdb_txn_safe: m_txn is a batch txn and it's not NULL in destructor - calling mdb_txn_abort()");
+      LOG_PRINT_L0("WARNING: mdb_txn_safe: m_txn is a batch txn and it's not nullptr in destructor - calling mdb_txn_abort()");
     }
     else
     {
@@ -398,7 +398,7 @@ mdb_txn_safe::~mdb_txn_safe()
       //
       // NOTE: not sure if this is ever reached for a non-batch write
       // transaction, but it's probably not ideal if it did.
-      LOG_PRINT_L3("mdb_txn_safe: m_txn not NULL in destructor - calling mdb_txn_abort()");
+      LOG_PRINT_L3("mdb_txn_safe: m_txn not nullptr in destructor - calling mdb_txn_abort()");
     }
     mdb_txn_abort(m_txn);
   }
@@ -436,7 +436,7 @@ void mdb_txn_safe::abort()
   }
   else
   {
-    LOG_PRINT_L0("WARNING: mdb_txn_safe: abort() called, but m_txn is NULL");
+    LOG_PRINT_L0("WARNING: mdb_txn_safe: abort() called, but m_txn is nullptr");
   }
 }
 
@@ -472,7 +472,7 @@ void mdb_txn_safe::increment_txns(int i)
     txn_ptr = m_write_txn; \
   else \
   { \
-    if (auto mdb_res = lmdb_txn_begin(m_env, NULL, flags, auto_txn)) \
+    if (auto mdb_res = lmdb_txn_begin(m_env, nullptr, flags, auto_txn)) \
       throw0(DB_ERROR(lmdb_error(std::string("Failed to create a transaction for the db in ")+__FUNCTION__+": ", mdb_res).c_str())); \
   } \
 
@@ -992,13 +992,13 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   txindex *tip = (txindex *)val_h.mv_data;
   MDB_val_set(val_tx_id, tip->data.tx_id);
 
-  if ((result = mdb_cursor_get(m_cur_txs_pruned, &val_tx_id, NULL, MDB_SET)))
+  if ((result = mdb_cursor_get(m_cur_txs_pruned, &val_tx_id, nullptr, MDB_SET)))
       throw1(DB_ERROR(lmdb_error("Failed to locate pruned tx for removal: ", result).c_str()));
   result = mdb_cursor_del(m_cur_txs_pruned, 0);
   if (result)
       throw1(DB_ERROR(lmdb_error("Failed to add removal of pruned tx to db transaction: ", result).c_str()));
 
-  result = mdb_cursor_get(m_cur_txs_prunable, &val_tx_id, NULL, MDB_SET);
+  result = mdb_cursor_get(m_cur_txs_prunable, &val_tx_id, nullptr, MDB_SET);
   if (result == 0)
   {
       result = mdb_cursor_del(m_cur_txs_prunable, 0);
@@ -1008,7 +1008,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   else if (result != MDB_NOTFOUND)
       throw1(DB_ERROR(lmdb_error("Failed to locate prunable tx for removal: ", result).c_str()));
 
-  result = mdb_cursor_get(m_cur_txs_prunable_tip, &val_tx_id, NULL, MDB_SET);
+  result = mdb_cursor_get(m_cur_txs_prunable_tip, &val_tx_id, nullptr, MDB_SET);
   if (result && result != MDB_NOTFOUND)
       throw1(DB_ERROR(lmdb_error("Failed to locate tx id for removal: ", result).c_str()));
   if (result == 0)
@@ -1020,7 +1020,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
 
   if (tx.version > 1)
   {
-    if ((result = mdb_cursor_get(m_cur_txs_prunable_hash, &val_tx_id, NULL, MDB_SET)))
+    if ((result = mdb_cursor_get(m_cur_txs_prunable_hash, &val_tx_id, nullptr, MDB_SET)))
         throw1(DB_ERROR(lmdb_error("Failed to locate prunable hash tx for removal: ", result).c_str()));
     result = mdb_cursor_del(m_cur_txs_prunable_hash, 0);
     if (result)
@@ -1029,7 +1029,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
 
   remove_tx_outputs(tip->data.tx_id, tx);
 
-  result = mdb_cursor_get(m_cur_tx_outputs, &val_tx_id, NULL, MDB_SET);
+  result = mdb_cursor_get(m_cur_tx_outputs, &val_tx_id, nullptr, MDB_SET);
   if (result == MDB_NOTFOUND)
     LOG_PRINT_L1("tx has no outputs to remove: " << tx_hash);
   else if (result)
@@ -1412,7 +1412,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 
   // get a read/write MDB_txn, depending on mdb_flags
   mdb_txn_safe txn;
-  if (auto mdb_res = mdb_txn_begin(m_env, NULL, txn_flags, txn))
+  if (auto mdb_res = mdb_txn_begin(m_env, nullptr, txn_flags, txn))
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", mdb_res).c_str()));
 
   // open necessary databases, and set properties as needed
@@ -1606,7 +1606,7 @@ void BlockchainLMDB::reset()
   check_open();
 
   mdb_txn_safe txn;
-  if (auto result = lmdb_txn_begin(m_env, NULL, 0, txn))
+  if (auto result = lmdb_txn_begin(m_env, nullptr, 0, txn))
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
   if (auto result = mdb_drop(txn, m_blocks, 0))
@@ -1719,7 +1719,7 @@ void BlockchainLMDB::unlock()
     txn_ptr = m_write_txn; \
   else \
   { \
-    if (auto mdb_res = lmdb_txn_begin(m_env, NULL, flags, auto_txn)) \
+    if (auto mdb_res = lmdb_txn_begin(m_env, nullptr, flags, auto_txn)) \
       throw0(DB_ERROR(lmdb_error(std::string("Failed to create a transaction for the db in ")+__FUNCTION__+": ", mdb_res).c_str())); \
   } \
 
@@ -1862,7 +1862,7 @@ void BlockchainLMDB::remove_txpool_tx(const crypto::hash& txid)
   CURSOR(txpool_blob)
 
   MDB_val k = {sizeof(txid), (void *)&txid};
-  auto result = mdb_cursor_get(m_cur_txpool_meta, &k, NULL, MDB_SET);
+  auto result = mdb_cursor_get(m_cur_txpool_meta, &k, nullptr, MDB_SET);
   if (result != 0 && result != MDB_NOTFOUND)
     throw1(DB_ERROR(lmdb_error("Error finding txpool tx meta to remove: ", result).c_str()));
   if (!result)
@@ -1871,7 +1871,7 @@ void BlockchainLMDB::remove_txpool_tx(const crypto::hash& txid)
     if (result)
       throw1(DB_ERROR(lmdb_error("Error adding removal of txpool tx metadata to db transaction: ", result).c_str()));
   }
-  result = mdb_cursor_get(m_cur_txpool_blob, &k, NULL, MDB_SET);
+  result = mdb_cursor_get(m_cur_txpool_blob, &k, nullptr, MDB_SET);
   if (result != 0 && result != MDB_NOTFOUND)
     throw1(DB_ERROR(lmdb_error("Error finding txpool tx blob to remove: ", result).c_str()));
   if (!result)
@@ -2000,7 +2000,7 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
   uint64_t n_bytes = 0;
 
   mdb_txn_safe txn;
-  auto result = mdb_txn_begin(m_env, NULL, 0, txn);
+  auto result = mdb_txn_begin(m_env, nullptr, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
@@ -2114,7 +2114,7 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
         {
           MDEBUG("Committing txn at checkpoint...");
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
           result = mdb_cursor_open(txn, m_txs_pruned, &c_txs_pruned);
@@ -2219,7 +2219,7 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
       {
         MDEBUG("Committing txn at checkpoint...");
         txn.commit();
-        result = mdb_txn_begin(m_env, NULL, 0, txn);
+        result = mdb_txn_begin(m_env, nullptr, 0, txn);
         if (result)
           throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         result = mdb_cursor_open(txn, m_txs_pruned, &c_txs_pruned);
@@ -3807,7 +3807,7 @@ bool BlockchainLMDB::batch_start(uint64_t batch_num_blocks, uint64_t batch_bytes
   m_write_batch_txn = new mdb_txn_safe();
 
   // NOTE: need to make sure it's destroyed properly when done
-  if (auto mdb_res = lmdb_txn_begin(m_env, NULL, 0, *m_write_batch_txn))
+  if (auto mdb_res = lmdb_txn_begin(m_env, nullptr, 0, *m_write_batch_txn))
   {
     delete m_write_batch_txn;
     m_write_batch_txn = nullptr;
@@ -3950,7 +3950,7 @@ bool BlockchainLMDB::block_rtxn_start(MDB_txn **mtxn, mdb_txn_cursors **mcur) co
     m_tinfo.reset(tinfo);
     memset(&tinfo->m_ti_rcursors, 0, sizeof(tinfo->m_ti_rcursors));
     memset(&tinfo->m_ti_rflags, 0, sizeof(tinfo->m_ti_rflags));
-    if (auto mdb_res = lmdb_txn_begin(m_env, NULL, MDB_RDONLY, &tinfo->m_ti_rtxn))
+    if (auto mdb_res = lmdb_txn_begin(m_env, nullptr, MDB_RDONLY, &tinfo->m_ti_rtxn))
       throw0(DB_ERROR_TXN_START(lmdb_error("Failed to create a read transaction for the db: ", mdb_res).c_str()));
     ret = true;
   } else if (!tinfo->m_ti_rflags.m_rf_txn)
@@ -4006,7 +4006,7 @@ void BlockchainLMDB::block_wtxn_start()
   {
     m_writer = boost::this_thread::get_id();
     m_write_txn = new mdb_txn_safe();
-    if (auto mdb_res = lmdb_txn_begin(m_env, NULL, 0, *m_write_txn))
+    if (auto mdb_res = lmdb_txn_begin(m_env, nullptr, 0, *m_write_txn))
     {
       delete m_write_txn;
       m_write_txn = nullptr;
@@ -4583,7 +4583,7 @@ void BlockchainLMDB::fixup()
     result = mdb_cursor_open(txn, 1, &c_cur); \
     if (result) \
       throw0(DB_ERROR(lmdb_error("Failed to open a cursor for " name ": ", result).c_str())); \
-    result = mdb_cursor_get(c_cur, &k, NULL, MDB_SET_KEY); \
+    result = mdb_cursor_get(c_cur, &k, nullptr, MDB_SET_KEY); \
     if (result) \
       throw0(DB_ERROR(lmdb_error("Failed to get DB record for " name ": ", result).c_str())); \
     ptr = (char *)k.mv_data; \
@@ -4604,7 +4604,7 @@ void BlockchainLMDB::migrate_0_1()
   MINFO("updating blocks, hf_versions, outputs, txs, and spent_keys tables...");
 
   do {
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
@@ -4654,7 +4654,7 @@ void BlockchainLMDB::migrate_0_1()
             std::cout << i << " / " << z << "  \r" << std::flush;
           }
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         }
@@ -4694,7 +4694,7 @@ void BlockchainLMDB::migrate_0_1()
       i++;
     }
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     /* Delete the old table */
@@ -4719,7 +4719,7 @@ void BlockchainLMDB::migrate_0_1()
     LOG_PRINT_L1("migrating block info:");
 
     MDB_dbi coins;
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     result = mdb_dbi_open(txn, "block_coins", 0, &coins);
@@ -4747,7 +4747,7 @@ void BlockchainLMDB::migrate_0_1()
             std::cout << i << " / " << z << "  \r" << std::flush;
           }
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         }
@@ -4851,7 +4851,7 @@ void BlockchainLMDB::migrate_0_1()
     MDB_dbi o_hfv;
 
     unsigned int flags;
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     result = mdb_dbi_flags(txn, m_hf_versions, &flags);
@@ -4881,7 +4881,7 @@ void BlockchainLMDB::migrate_0_1()
             std::cout << i << " / " << z << "  \r" << std::flush;
           }
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         }
@@ -4915,7 +4915,7 @@ void BlockchainLMDB::migrate_0_1()
       i++;
     }
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     /* Delete the old table */
@@ -4934,7 +4934,7 @@ void BlockchainLMDB::migrate_0_1()
 
     /* Delete all other tables, we're just going to recreate them */
     MDB_dbi dbi;
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
@@ -4948,7 +4948,7 @@ void BlockchainLMDB::migrate_0_1()
 
 #define DELETE_DB(x) do {   \
     LOG_PRINT_L1("  " x ":"); \
-    result = mdb_txn_begin(m_env, NULL, 0, txn); \
+    result = mdb_txn_begin(m_env, nullptr, 0, txn); \
     if (result) \
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str())); \
     result = mdb_dbi_open(txn, x, 0, &dbi); \
@@ -4969,7 +4969,7 @@ void BlockchainLMDB::migrate_0_1()
     DELETE_DB("tx_unlocks");
 
     /* reopen new DBs with correct flags */
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     lmdb_db_open(txn, LMDB_OUTPUT_TXS, MDB_INTEGERKEY | MDB_CREATE | MDB_DUPSORT | MDB_DUPFIXED, m_output_txs, "Failed to open db handle for m_output_txs");
@@ -4986,7 +4986,7 @@ void BlockchainLMDB::migrate_0_1()
     LOG_PRINT_L1("migrating txs and outputs:");
 
     unsigned int flags;
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     result = mdb_dbi_flags(txn, m_txs, &flags);
@@ -5032,7 +5032,7 @@ void BlockchainLMDB::migrate_0_1()
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to update txblk property: ", result).c_str()));
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
           m_write_txn->m_txn = txn.m_txn;
@@ -5104,7 +5104,7 @@ void BlockchainLMDB::migrate_0_1()
       i++;
       m_height = i;
     }
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     result = mdb_drop(txn, o_txs, 1);
@@ -5124,7 +5124,7 @@ void BlockchainLMDB::migrate_0_1()
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
   MDB_val_str(vk, "version");
-  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  result = mdb_txn_begin(m_env, nullptr, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
   result = mdb_put(txn, m_properties, &vk, &v, 0);
@@ -5145,7 +5145,7 @@ void BlockchainLMDB::migrate_1_2()
   MINFO("updating txs_pruned and txs_prunable tables...");
 
   do {
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
@@ -5185,7 +5185,7 @@ void BlockchainLMDB::migrate_1_2()
             std::cout << i << " / " << (i + db_stats_txs.ms_entries) << "  \r" << std::flush;
           }
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         }
@@ -5264,7 +5264,7 @@ void BlockchainLMDB::migrate_1_2()
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
   MDB_val_str(vk, "version");
-  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  result = mdb_txn_begin(m_env, nullptr, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
   result = mdb_put(txn, m_properties, &vk, &v, 0);
@@ -5287,7 +5287,7 @@ void BlockchainLMDB::migrate_2_3()
   do {
     LOG_PRINT_L1("migrating block info:");
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
@@ -5329,7 +5329,7 @@ void BlockchainLMDB::migrate_2_3()
             std::cout << i << " / " << blockchain_height << "  \r" << std::flush;
           }
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         }
@@ -5378,7 +5378,7 @@ void BlockchainLMDB::migrate_2_3()
       i++;
     }
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     /* Delete the old table */
@@ -5399,7 +5399,7 @@ void BlockchainLMDB::migrate_2_3()
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
   MDB_val_str(vk, "version");
-  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  result = mdb_txn_begin(m_env, nullptr, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
   result = mdb_put(txn, m_properties, &vk, &v, 0);
@@ -5423,7 +5423,7 @@ void BlockchainLMDB::migrate_3_4()
   do {
     LOG_PRINT_L1("migrating block info:");
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
@@ -5457,7 +5457,7 @@ void BlockchainLMDB::migrate_3_4()
             std::cout << i << " / " << blockchain_height << "  \r" << std::flush;
           }
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         }
@@ -5537,7 +5537,7 @@ void BlockchainLMDB::migrate_3_4()
       i++;
     }
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     /* Delete the old table */
@@ -5558,7 +5558,7 @@ void BlockchainLMDB::migrate_3_4()
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
   MDB_val_str(vk, "version");
-  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  result = mdb_txn_begin(m_env, nullptr, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
   result = mdb_put(txn, m_properties, &vk, &v, 0);
@@ -5581,7 +5581,7 @@ void BlockchainLMDB::migrate_4_5()
   do {
     LOG_PRINT_L1("migrating block info:");
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
 
@@ -5613,7 +5613,7 @@ void BlockchainLMDB::migrate_4_5()
             std::cout << i << " / " << blockchain_height << "  \r" << std::flush;
           }
           txn.commit();
-          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          result = mdb_txn_begin(m_env, nullptr, 0, txn);
           if (result)
             throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
         }
@@ -5663,7 +5663,7 @@ void BlockchainLMDB::migrate_4_5()
       i++;
     }
 
-    result = mdb_txn_begin(m_env, NULL, 0, txn);
+    result = mdb_txn_begin(m_env, nullptr, 0, txn);
     if (result)
       throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
     /* Delete the old table */
@@ -5684,7 +5684,7 @@ void BlockchainLMDB::migrate_4_5()
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
   MDB_val_str(vk, "version");
-  result = mdb_txn_begin(m_env, NULL, 0, txn);
+  result = mdb_txn_begin(m_env, nullptr, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
   result = mdb_put(txn, m_properties, &vk, &v, 0);

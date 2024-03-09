@@ -1386,7 +1386,7 @@ namespace nodetool
 
 
     MDEBUG("Connecting to " << na.str() << "(peer_type=" << peer_type << ", last_seen: "
-        << (last_seen_stamp ? epee::misc_utils::get_time_interval_string(time(NULL) - last_seen_stamp):"never")
+        << (last_seen_stamp ? epee::misc_utils::get_time_interval_string(time(nullptr) - last_seen_stamp):"never")
         << ")...");
 
     auto con = zone.m_connect(zone, na, m_ssl_support);
@@ -1453,7 +1453,7 @@ namespace nodetool
       return false;
 
     LOG_PRINT_L1("Connecting to " << na.str() << "(last_seen: "
-                                  << (last_seen_stamp ? epee::misc_utils::get_time_interval_string(time(NULL) - last_seen_stamp):"never")
+                                  << (last_seen_stamp ? epee::misc_utils::get_time_interval_string(time(nullptr) - last_seen_stamp):"never")
                                   << ")...");
 
     auto con = zone.m_connect(zone, na, m_ssl_support);
@@ -1491,7 +1491,7 @@ namespace nodetool
   void node_server<t_payload_net_handler>::record_addr_failed(const epee::net_utils::network_address& addr)
   {
     CRITICAL_REGION_LOCAL(m_conn_fails_cache_lock);
-    m_conn_fails_cache[addr.host_str()] = time(NULL);
+    m_conn_fails_cache[addr.host_str()] = time(nullptr);
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
@@ -1502,7 +1502,7 @@ namespace nodetool
     if(it == m_conn_fails_cache.end())
       return false;
 
-    if(time(NULL) - it->second > P2P_FAILED_ADDR_FORGET_SECONDS)
+    if(time(nullptr) - it->second > P2P_FAILED_ADDR_FORGET_SECONDS)
       return false;
     else
       return true;
@@ -1529,7 +1529,7 @@ namespace nodetool
 
       MDEBUG("Selected peer: " << peerid_to_string(pe.id) << " " << pe.adr.str()
                                << "[peer_type=" << anchor
-                               << "] first_seen: " << epee::misc_utils::get_time_interval_string(time(NULL) - pe.first_seen));
+                               << "] first_seen: " << epee::misc_utils::get_time_interval_string(time(nullptr) - pe.first_seen));
 
       if(!try_to_connect_and_handshake_with_new_peer(pe.adr, false, 0, anchor, pe.first_seen)) {
         _note("Handshake failed");
@@ -1718,7 +1718,7 @@ namespace nodetool
       MDEBUG("Selected peer: " << peerid_to_string(pe.id) << " " << pe.adr.str()
                     << ", pruning seed " << epee::string_tools::to_string_hex(pe.pruning_seed) << " "
                     << "[peer_list=" << (use_white_list ? white : gray)
-                    << "] last_seen: " << (pe.last_seen ? epee::misc_utils::get_time_interval_string(time(NULL) - pe.last_seen) : "never"));
+                    << "] last_seen: " << (pe.last_seen ? epee::misc_utils::get_time_interval_string(time(nullptr) - pe.last_seen) : "never"));
 
       if(!try_to_connect_and_handshake_with_new_peer(pe.adr, false, pe.last_seen, use_white_list ? white : gray)) {
         _note("Handshake failed");
@@ -2978,9 +2978,9 @@ namespace nodetool
 #if MINIUPNPC_API_VERSION > 13
     // default according to miniupnpc.h
     unsigned char ttl = 2;
-    UPNPDev* deviceList = upnpDiscover(1000, NULL, NULL, 0, ipv6_arg, ttl, &result);
+    UPNPDev* deviceList = upnpDiscover(1000, nullptr, nullptr, 0, ipv6_arg, ttl, &result);
 #else
-    UPNPDev* deviceList = upnpDiscover(1000, NULL, NULL, 0, ipv6_arg, &result);
+    UPNPDev* deviceList = upnpDiscover(1000, nullptr, nullptr, 0, ipv6_arg, &result);
 #endif
     UPNPUrls urls;
     IGDdatas igdData;
@@ -3046,9 +3046,9 @@ namespace nodetool
 #if MINIUPNPC_API_VERSION > 13
     // default according to miniupnpc.h
     unsigned char ttl = 2;
-    UPNPDev* deviceList = upnpDiscover(1000, NULL, NULL, 0, ipv6_arg, ttl, &result);
+    UPNPDev* deviceList = upnpDiscover(1000, nullptr, nullptr, 0, ipv6_arg, ttl, &result);
 #else
-    UPNPDev* deviceList = upnpDiscover(1000, NULL, NULL, 0, ipv6_arg, &result);
+    UPNPDev* deviceList = upnpDiscover(1000, nullptr, nullptr, 0, ipv6_arg, &result);
 #endif
     UPNPUrls urls;
     IGDdatas igdData;

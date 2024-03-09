@@ -151,7 +151,7 @@ static bool resize_point(size_t &nrecords, MDB_env *env, MDB_txn **txn, size_t &
   int dbr = mdb_txn_commit(*txn);
   if (dbr) throw std::runtime_error("Failed to commit txn: " + std::string(mdb_strerror(dbr)));
   check_resize(env, bytes);
-  dbr = mdb_txn_begin(env, NULL, 0, txn);
+  dbr = mdb_txn_begin(env, nullptr, 0, txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   bytes = 0;
   nrecords = 0;
@@ -173,10 +173,10 @@ static void copy_table(MDB_env *env0, MDB_env *env1, const char *table, unsigned
     if (tx_active0) mdb_txn_abort(txn0);
   });
 
-  dbr = mdb_txn_begin(env0, NULL, MDB_RDONLY, &txn0);
+  dbr = mdb_txn_begin(env0, nullptr, MDB_RDONLY, &txn0);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   tx_active0 = true;
-  dbr = mdb_txn_begin(env1, NULL, 0, &txn1);
+  dbr = mdb_txn_begin(env1, nullptr, 0, &txn1);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   tx_active1 = true;
 
@@ -197,7 +197,7 @@ static void copy_table(MDB_env *env0, MDB_env *env1, const char *table, unsigned
   dbr = mdb_env_stat(env0, &stats);
   if (dbr) throw std::runtime_error("Failed to stat " + std::string(table) + " LMDB table: " + std::string(mdb_strerror(dbr)));
   check_resize(env1, (stats.ms_branch_pages + stats.ms_overflow_pages + stats.ms_leaf_pages) * stats.ms_psize);
-  dbr = mdb_txn_begin(env1, NULL, 0, &txn1);
+  dbr = mdb_txn_begin(env1, nullptr, 0, &txn1);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   tx_active1 = true;
 
@@ -268,10 +268,10 @@ static void prune(MDB_env *env0, MDB_env *env1)
     if (tx_active0) mdb_txn_abort(txn0);
   });
 
-  dbr = mdb_txn_begin(env0, NULL, MDB_RDONLY, &txn0);
+  dbr = mdb_txn_begin(env0, nullptr, MDB_RDONLY, &txn0);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   tx_active0 = true;
-  dbr = mdb_txn_begin(env1, NULL, 0, &txn1);
+  dbr = mdb_txn_begin(env1, nullptr, 0, &txn1);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   tx_active1 = true;
 
@@ -570,7 +570,7 @@ int main(int argc, char* argv[])
   for (size_t n = 0; n < core_storage.size(); ++n)
   {
     BlockchainDB* db = new_db();
-    if (db == NULL)
+    if (db == nullptr)
     {
       MERROR("Failed to initialize a database");
       throw std::runtime_error("Failed to initialize a database");
@@ -629,19 +629,19 @@ int main(int argc, char* argv[])
     }
   }
   core_storage[0]->blockchain.deinit();
-  core_storage[0].reset(NULL);
+  core_storage[0].reset(nullptr);
   core_storage[1]->blockchain.deinit();
-  core_storage[1].reset(NULL);
+  core_storage[1].reset(nullptr);
 
   MINFO("Pruning...");
-  MDB_env *env0 = NULL, *env1 = NULL;
+  MDB_env *env0 = nullptr, *env1 = nullptr;
   open(env0, paths[0], db_flags, true);
   open(env1, paths[1], db_flags, false);
   copy_table(env0, env1, "blocks", MDB_INTEGERKEY, 0);
   copy_table(env0, env1, "block_info", MDB_INTEGERKEY | MDB_DUPSORT| MDB_DUPFIXED, 0, BlockchainLMDB::compare_uint64);
   copy_table(env0, env1, "block_heights", MDB_INTEGERKEY | MDB_DUPSORT| MDB_DUPFIXED, 0, BlockchainLMDB::compare_hash32);
   //copy_table(env0, env1, "txs", MDB_INTEGERKEY);
-  copy_table(env0, env1, "txs_pruned", MDB_INTEGERKEY, 0, NULL, &mark_v1_tx);
+  copy_table(env0, env1, "txs_pruned", MDB_INTEGERKEY, 0, nullptr, &mark_v1_tx);
   copy_table(env0, env1, "txs_prunable_hash", MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED, 0);
   // not copied: prunable, prunable_tip
   copy_table(env0, env1, "tx_indices", MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED, 0, BlockchainLMDB::compare_hash32);

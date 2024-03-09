@@ -52,7 +52,7 @@ namespace
   net::zmq::socket init_socket(void* context, int type, epee::span<const std::string> addresses)
   {
     if (context == nullptr)
-      throw std::logic_error{"NULL context provided"};
+      throw std::logic_error{"nullptr context provided"};
 
     net::zmq::socket out{};
     out.reset(zmq_socket(context, type));

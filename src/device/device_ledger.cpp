@@ -1102,7 +1102,7 @@ namespace hw {
     }
 
     bool device_ledger::conceal_derivation(crypto::key_derivation &derivation, const crypto::public_key &tx_pub_key, const std::vector<crypto::public_key> &additional_tx_pub_keys, const crypto::key_derivation &main_derivation, const std::vector<crypto::key_derivation> &additional_derivations) {
-      const crypto::public_key *pkey=NULL;
+      const crypto::public_key *pkey=nullptr;
       if (derivation == main_derivation) {        
         pkey = &tx_pub_key;
         MDEBUG("conceal derivation with main tx pub key");
@@ -2358,7 +2358,7 @@ namespace hw {
 
     /* ---------------------------------------------------------- */
 
-    static device_ledger *legder_device = NULL;
+    static device_ledger *legder_device = nullptr;
     void register_all(std::map<std::string, std::unique_ptr<device>> &registry) {
       if (!legder_device) {
         legder_device = new device_ledger();

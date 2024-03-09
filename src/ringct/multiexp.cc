@@ -347,7 +347,7 @@ struct straus_cached_data
 #ifdef RAW_MEMORY_BLOCK
   size_t size;
   ge_cached *multiples;
-  straus_cached_data(): size(0), multiples(NULL) {}
+  straus_cached_data(): size(0), multiples(nullptr) {}
   ~straus_cached_data() { aligned_free(multiples); }
 #else
   std::vector<std::vector<ge_cached>> multiples;
@@ -445,12 +445,12 @@ size_t straus_get_cache_size(const std::shared_ptr<straus_cached_data> &cache)
 
 ge_p3 straus_p3(const std::vector<MultiexpData> &data, const std::shared_ptr<straus_cached_data> &cache, size_t STEP)
 {
-  CHECK_AND_ASSERT_THROW_MES(cache == NULL || cache->size >= data.size(), "Cache is too small");
+  CHECK_AND_ASSERT_THROW_MES(cache == nullptr || cache->size >= data.size(), "Cache is too small");
   MULTIEXP_PERF(PERF_TIMER_UNIT(straus, 1000000));
   STEP = STEP ? STEP : 192;
 
   MULTIEXP_PERF(PERF_TIMER_START_UNIT(setup, 1000000));
-  std::shared_ptr<straus_cached_data> local_cache = cache == NULL ? straus_init_cache(data) : cache;
+  std::shared_ptr<straus_cached_data> local_cache = cache == nullptr ? straus_init_cache(data) : cache;
   ge_cached cached;
   ge_p1p1 p1;
 
@@ -601,9 +601,9 @@ size_t pippenger_get_cache_size(const std::shared_ptr<pippenger_cached_data> &ca
 
 ge_p3 pippenger_p3(const std::vector<MultiexpData> &data, const std::shared_ptr<pippenger_cached_data> &cache, size_t cache_size, size_t c)
 {
-  if (cache != NULL && cache_size == 0)
+  if (cache != nullptr && cache_size == 0)
     cache_size = cache->size();
-  CHECK_AND_ASSERT_THROW_MES(cache == NULL || cache_size <= cache->size(), "Cache is too small");
+  CHECK_AND_ASSERT_THROW_MES(cache == nullptr || cache_size <= cache->size(), "Cache is too small");
   if (c == 0)
     c = get_pippenger_c(data.size());
   CHECK_AND_ASSERT_THROW_MES(c <= 9, "c is too large");
@@ -612,8 +612,8 @@ ge_p3 pippenger_p3(const std::vector<MultiexpData> &data, const std::shared_ptr<
   bool result_init = false;
   std::unique_ptr<ge_p3[]> buckets{new ge_p3[1<<c]};
   bool buckets_init[1<<9];
-  std::shared_ptr<pippenger_cached_data> local_cache = cache == NULL ? pippenger_init_cache(data) : cache;
-  std::shared_ptr<pippenger_cached_data> local_cache_2 = data.size() > cache_size ? pippenger_init_cache(data, cache_size) : NULL;
+  std::shared_ptr<pippenger_cached_data> local_cache = cache == nullptr ? pippenger_init_cache(data) : cache;
+  std::shared_ptr<pippenger_cached_data> local_cache_2 = data.size() > cache_size ? pippenger_init_cache(data, cache_size) : nullptr;
 
   rct::key maxscalar = rct::zero();
   for (size_t i = 0; i < data.size(); ++i)

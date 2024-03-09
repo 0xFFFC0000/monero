@@ -62,7 +62,7 @@ bool AddressBookImpl::addRow(const std::string &dst_addr , const std::string &pa
     return false;
   }
 
-  bool r =  m_wallet->m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL,description,info.is_subaddress);
+  bool r =  m_wallet->m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : nullptr,description,info.is_subaddress);
   if (r)
     refresh();
   else

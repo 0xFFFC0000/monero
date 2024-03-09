@@ -95,7 +95,7 @@ int spawn(const char *filename, const std::vector<std::string>& args, bool wait)
   std::vector<char*> argv(args.size() + 1);
   for (size_t n = 0; n < args.size(); ++n)
     argv[n] = (char*)args[n].c_str();
-  argv[args.size()] = NULL;
+  argv[args.size()] = nullptr;
 
   pid_t pid = fork();
   if (pid < 0)
@@ -109,7 +109,7 @@ int spawn(const char *filename, const std::vector<std::string>& args, bool wait)
   {
     tools::closefrom(3);
     close(0);
-    char *envp[] = {NULL};
+    char *envp[] = {nullptr};
     execve(filename, argv.data(), envp);
     MERROR("Failed to execve: " << strerror(errno));
     return -1;

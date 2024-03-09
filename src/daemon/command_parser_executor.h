@@ -55,7 +55,7 @@ public:
     , const boost::optional<tools::login>& login
     , const epee::net_utils::ssl_options_t& ssl_options
     , bool is_rpc
-    , cryptonote::core_rpc_server* rpc_server = NULL
+    , cryptonote::core_rpc_server* rpc_server = nullptr
     );
 
   bool print_peer_list(const std::vector<std::string>& args);

@@ -583,7 +583,7 @@ namespace cryptonote
         rx_set = true;
       }
 
-      m_gbh(b, height, NULL, tools::get_max_concurrency(), h);
+      m_gbh(b, height, nullptr, tools::get_max_concurrency(), h);
 
       if(check_hash(h, local_diff))
       {
@@ -905,7 +905,7 @@ namespace cryptonote
 
       struct statinfo s;
       size_t n = sizeof(s.cp_time);
-      if( sysctlbyname("kern.cp_time", s.cp_time, &n, NULL, 0) == -1 )
+      if( sysctlbyname("kern.cp_time", s.cp_time, &n, nullptr, 0) == -1 )
       {
         LOG_ERROR("sysctlbyname(\"kern.cp_time\"): " << strerror(errno));
         return false;
@@ -1080,7 +1080,7 @@ namespace cryptonote
     #elif defined(__FreeBSD__)
       int ac;
       size_t n = sizeof(ac);
-      if( sysctlbyname("hw.acpi.acline", &ac, &n, NULL, 0) == -1 )
+      if( sysctlbyname("hw.acpi.acline", &ac, &n, nullptr, 0) == -1 )
       {
         if( errno != ENOENT )
         {

@@ -160,7 +160,7 @@ int main(int argc, char* argv[])
   std::unique_ptr<BlockchainAndPool> core_storage = std::make_unique<BlockchainAndPool>();
 
   BlockchainDB *db = new_db();
-  if (db == NULL)
+  if (db == nullptr)
   {
     LOG_ERROR("Failed to initialize a database");
     throw std::runtime_error("Failed to initialize a database");

@@ -158,7 +158,7 @@ t_rpc_command_executor::t_rpc_command_executor(
   , bool is_rpc
   , cryptonote::core_rpc_server* rpc_server
   )
-  : m_rpc_client(NULL), m_rpc_server(rpc_server)
+  : m_rpc_client(nullptr), m_rpc_server(rpc_server)
 {
   if (is_rpc)
   {
@@ -169,7 +169,7 @@ t_rpc_command_executor::t_rpc_command_executor(
   }
   else
   {
-    if (rpc_server == NULL)
+    if (rpc_server == nullptr)
     {
       throw std::runtime_error("If not calling commands via RPC, rpc_server pointer must be non-null");
     }
@@ -180,7 +180,7 @@ t_rpc_command_executor::t_rpc_command_executor(
 
 t_rpc_command_executor::~t_rpc_command_executor()
 {
-  if (m_rpc_client != NULL)
+  if (m_rpc_client != nullptr)
   {
     delete m_rpc_client;
   }
@@ -728,7 +728,7 @@ bool t_rpc_command_executor::print_net_stats()
     }
   }
 
-  uint64_t seconds = (uint64_t)time(NULL) - net_stats_res.start_time;
+  uint64_t seconds = (uint64_t)time(nullptr) - net_stats_res.start_time;
   uint64_t average = seconds > 0 ? net_stats_res.total_bytes_in / seconds : 0;
   uint64_t limit = limit_res.limit_down * 1024;   // convert to bytes, as limits are always kB/s
   double percent = (double)average / (double)limit * 100.0;
@@ -1164,7 +1164,7 @@ bool t_rpc_command_executor::print_transaction_pool_long() {
   }
   if (! res.transactions.empty())
   {
-    const time_t now = time(NULL);
+    const time_t now = time(nullptr);
     tools::msg_writer() << "Transactions: ";
     for (auto & tx_info : res.transactions)
     {
@@ -1250,7 +1250,7 @@ bool t_rpc_command_executor::print_transaction_pool_short() {
   }
   else
   {
-    const time_t now = time(NULL);
+    const time_t now = time(nullptr);
     for (auto & tx_info : res.transactions)
     {
       tools::msg_writer() << "id: " << tx_info.id_hash << std::endl
@@ -1308,7 +1308,7 @@ bool t_rpc_command_executor::print_transaction_pool_stats() {
   }
 
   size_t n_transactions = res.pool_stats.txs_total;
-  const uint64_t now = time(NULL);
+  const uint64_t now = time(nullptr);
   size_t avg_bytes = n_transactions ? res.pool_stats.bytes_total / n_transactions : 0;
 
   std::string backlog_message;
@@ -1989,7 +1989,7 @@ bool t_rpc_command_executor::alt_chain_info(const std::string &tip, size_t above
   }
   else
   {
-    const uint64_t now = time(NULL);
+    const uint64_t now = time(nullptr);
     const auto i = std::find_if(res.chains.begin(), res.chains.end(), [&tip](cryptonote::COMMAND_RPC_GET_ALTERNATE_CHAINS::chain_info &info){ return info.block_hash == tip; });
     if (i != res.chains.end())
     {

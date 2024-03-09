@@ -68,7 +68,7 @@ namespace
     {
       DWORD read;
       wchar_t ucs2_ch;
-      r = (TRUE == ::ReadConsoleW(h_cin, &ucs2_ch, 1, &read, NULL));
+      r = (TRUE == ::ReadConsoleW(h_cin, &ucs2_ch, 1, &read, nullptr));
       r &= (1 == read);
 
       if (!r)
@@ -94,7 +94,7 @@ namespace
       
       char utf8_ch[8] = {0};
       int len;
-      if((len = WideCharToMultiByte(CP_UTF8, 0, &ucs2_ch, 1, utf8_ch, sizeof(utf8_ch), NULL, NULL)) <= 0)
+      if((len = WideCharToMultiByte(CP_UTF8, 0, &ucs2_ch, 1, utf8_ch, sizeof(utf8_ch), nullptr, nullptr)) <= 0)
         break;
 
       if(pass.size() + len >= tools::password_container::max_password_size)

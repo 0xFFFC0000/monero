@@ -87,7 +87,7 @@ namespace cryptonote
       MDEBUG("signature does not verify");
       return false;
     }
-    char *endptr = NULL;
+    char *endptr = nullptr;
     errno = 0;
     unsigned long long ull = strtoull(ts_string.c_str(), &endptr, 16);
     if (ull == ULLONG_MAX && errno == ERANGE)

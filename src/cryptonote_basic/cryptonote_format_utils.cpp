@@ -1232,7 +1232,7 @@ namespace cryptonote
         buf[0] = '1';
       }
     }
-    char *end = NULL;
+    char *end = nullptr;
     errno = 0;
     const unsigned long long ull = strtoull(buf, &end, 10);
     CHECK_AND_ASSERT_THROW_MES(ull != ULLONG_MAX || errno == 0, "Failed to parse rounded amount: " << buf);
@@ -1265,14 +1265,14 @@ namespace cryptonote
   crypto::hash get_transaction_hash(const transaction& t)
   {
     crypto::hash h = null_hash;
-    get_transaction_hash(t, h, NULL);
-    CHECK_AND_ASSERT_THROW_MES(get_transaction_hash(t, h, NULL), "Failed to calculate transaction hash");
+    get_transaction_hash(t, h, nullptr);
+    CHECK_AND_ASSERT_THROW_MES(get_transaction_hash(t, h, nullptr), "Failed to calculate transaction hash");
     return h;
   }
   //---------------------------------------------------------------
   bool get_transaction_hash(const transaction& t, crypto::hash& res)
   {
-    return get_transaction_hash(t, res, NULL);
+    return get_transaction_hash(t, res, nullptr);
   }
   //---------------------------------------------------------------
   bool calculate_transaction_prunable_hash(const transaction& t, const cryptonote::blobdata_ref *blob, crypto::hash& res)
@@ -1561,7 +1561,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool parse_and_validate_block_from_blob(const blobdata_ref& b_blob, block& b)
   {
-    return parse_and_validate_block_from_blob(b_blob, b, NULL);
+    return parse_and_validate_block_from_blob(b_blob, b, nullptr);
   }
   //---------------------------------------------------------------
   bool parse_and_validate_block_from_blob(const blobdata_ref& b_blob, block& b, crypto::hash &block_hash)

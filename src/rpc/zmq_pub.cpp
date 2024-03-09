@@ -365,7 +365,7 @@ zmq_pub::zmq_pub(void* context)
     sync_()
 {
   if (!context)
-    throw std::logic_error{"ZMQ context cannot be NULL"};
+    throw std::logic_error{"ZMQ context cannot be nullptr"};
 
   verify_sorted(chain_contexts, "chain_contexts");
   verify_sorted(miner_contexts, "miner_contexts");

@@ -248,7 +248,7 @@ namespace tools
       MERROR("Failed to convert path \"" << filename << "\" to UTF-16: " << e.what());
       return;
     }
-    m_fd = CreateFileW(filename_wide.c_str(), GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    m_fd = CreateFileW(filename_wide.c_str(), GENERIC_READ, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (m_fd != INVALID_HANDLE_VALUE)
     {
       OVERLAPPED ov;
@@ -307,7 +307,7 @@ namespace tools
   {
     WCHAR psz_path[MAX_PATH] = L"";
 
-    if (SHGetSpecialFolderPathW(NULL, psz_path, nfolder, iscreate))
+    if (SHGetSpecialFolderPathW(nullptr, psz_path, nfolder, iscreate))
     {
       try
       {
@@ -340,7 +340,7 @@ namespace tools
 #else
     std::string pathRet;
     char* pszHome = getenv("HOME");
-    if (pszHome == NULL || strlen(pszHome) == 0)
+    if (pszHome == nullptr || strlen(pszHome) == 0)
       pathRet = "/";
     else
       pathRet = pszHome;
@@ -520,7 +520,7 @@ namespace tools
 #if OPENSSL_VERSION_NUMBER < 0x10100000 || defined(LIBRESSL_VERSION_TEXT)
     SSL_library_init();
 #else
-    OPENSSL_init_ssl(0, NULL);
+    OPENSSL_init_ssl(0, nullptr);
 #endif
 
     if (!unbound_built_with_threads())
@@ -664,7 +664,7 @@ namespace tools
 
   bool sha256sum(const uint8_t *data, size_t len, crypto::hash &hash)
   {
-    return EVP_Digest(data, len, (unsigned char*) hash.data, NULL, EVP_sha256(), NULL) != 0;
+    return EVP_Digest(data, len, (unsigned char*) hash.data, nullptr, EVP_sha256(), nullptr) != 0;
   }
 
   bool sha256sum(const std::string &filename, crypto::hash &hash)
@@ -755,9 +755,9 @@ namespace tools
     SetConsoleMode(hConIn, oldMode);
     CloseHandle(hConIn);
   
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL, 0, NULL, NULL);
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, nullptr, 0, nullptr, nullptr);
     std::string buf(size_needed, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, buffer, -1, &buf[0], size_needed, NULL, NULL);
+    WideCharToMultiByte(CP_UTF8, 0, buffer, -1, &buf[0], size_needed, nullptr, nullptr);
     buf.pop_back(); //size_needed includes null that we needed to have space for
     return buf;
   }

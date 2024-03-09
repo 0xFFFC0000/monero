@@ -129,7 +129,7 @@ namespace cryptonote
      *
      * @return true on success, false if any initialization steps fail
      */
-    bool init(BlockchainDB* db, const network_type nettype = MAINNET, bool offline = false, const cryptonote::test_options *test_options = NULL, difficulty_type fixed_difficulty = 0, const GetCheckpointsCallback& get_checkpoints = nullptr);
+    bool init(BlockchainDB* db, const network_type nettype = MAINNET, bool offline = false, const cryptonote::test_options *test_options = nullptr, difficulty_type fixed_difficulty = 0, const GetCheckpointsCallback& get_checkpoints = nullptr);
 
     /**
      * @brief Initialize the Blockchain state
@@ -231,11 +231,11 @@ namespace cryptonote
      *
      * @param h the hash to look for
      * @param blk return-by-reference variable to put result block in
-     * @param orphan if non-NULL, will be set to true if not in the main chain, false otherwise
+     * @param orphan if non-nullptr, will be set to true if not in the main chain, false otherwise
      *
      * @return true if the block was found, else false
      */
-    bool get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan = NULL) const;
+    bool get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan = nullptr) const;
 
     /**
      * @brief performs some preprocessing on a group of incoming blocks to speed up verification
@@ -362,7 +362,7 @@ namespace cryptonote
      * @brief creates a new block to mine against
      *
      * @param b return-by-reference block to be filled in
-     * @param from_block optional block hash to start mining from (main chain tip if NULL)
+     * @param from_block optional block hash to start mining from (main chain tip if nullptr)
      * @param miner_address address new coins for the block will go to
      * @param di return-by-reference tells the miner what the difficulty target is
      * @param height return-by-reference tells the miner what height it's mining against
@@ -397,12 +397,12 @@ namespace cryptonote
      * for a block with the given hash
      *
      * @param id the hash to search for
-     * @param where the type of block, if non NULL
+     * @param where the type of block, if non nullptr
      *
      * @return true if the block is known, else false
      */
-    bool have_block_unlocked(const crypto::hash& id, int *where = NULL) const;
-    bool have_block(const crypto::hash& id, int *where = NULL) const;
+    bool have_block_unlocked(const crypto::hash& id, int *where = nullptr) const;
+    bool have_block(const crypto::hash& id, int *where = nullptr) const;
 
     /**
      * @brief gets the total number of transactions on the main chain
@@ -1242,7 +1242,7 @@ namespace cryptonote
      * and collects the public key for each from the transaction it was included in
      * via the visitor passed to it.
      *
-     * If pmax_related_block_height is not NULL, its value is set to the height
+     * If pmax_related_block_height is not nullptr, its value is set to the height
      * of the most recent block which contains an output used in the input set
      *
      * @tparam visitor_t a class encapsulating tx is unlocked and collect tx key
@@ -1255,7 +1255,7 @@ namespace cryptonote
      * @return false if any keys are not found or any inputs are not unlocked, otherwise true
      */
     template<class visitor_t>
-    inline bool scan_outputkeys_for_indexes(size_t tx_version, const txin_to_key& tx_in_to_key, visitor_t &vis, const crypto::hash &tx_prefix_hash, uint64_t* pmax_related_block_height = NULL) const;
+    inline bool scan_outputkeys_for_indexes(size_t tx_version, const txin_to_key& tx_in_to_key, visitor_t &vis, const crypto::hash &tx_prefix_hash, uint64_t* pmax_related_block_height = nullptr) const;
 
     /**
      * @brief collect output public keys of a transaction input set
@@ -1264,7 +1264,7 @@ namespace cryptonote
      * and validates that they exist and are usable
      * (unlocked, unspent is checked elsewhere).
      *
-     * If pmax_related_block_height is not NULL, its value is set to the height
+     * If pmax_related_block_height is not nullptr, its value is set to the height
      * of the most recent block which contains an output used in the input set
      *
      * @param tx_version the transaction version
@@ -1288,7 +1288,7 @@ namespace cryptonote
      * own function.
      * The transaction's rct signatures, if any, are expanded.
      *
-     * If pmax_related_block_height is not NULL, its value is set to the height
+     * If pmax_related_block_height is not nullptr, its value is set to the height
      * of the most recent block which contains an output used in any input set
      *
      * Currently this function calls ring signature validation for each
@@ -1300,7 +1300,7 @@ namespace cryptonote
      *
      * @return false if any validation step fails, otherwise true
      */
-    bool check_tx_inputs(transaction& tx, tx_verification_context &tvc, uint64_t* pmax_used_block_height = NULL) const;
+    bool check_tx_inputs(transaction& tx, tx_verification_context &tvc, uint64_t* pmax_used_block_height = nullptr) const;
 
     /**
      * @brief performs a blockchain reorganization according to the longest chain rule
@@ -1551,7 +1551,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool update_next_cumulative_weight_limit(uint64_t *long_term_effective_median_block_weight = NULL);
+    bool update_next_cumulative_weight_limit(uint64_t *long_term_effective_median_block_weight = nullptr);
     void return_tx_to_pool(std::vector<std::pair<transaction, blobdata>> &txs);
 
     /**

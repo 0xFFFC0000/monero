@@ -208,7 +208,7 @@ namespace tools
 
 ringdb::ringdb(std::string filename, const std::string &genesis):
   filename(filename),
-  env(NULL)
+  env(nullptr)
 {
   MDB_txn *txn;
   bool tx_active = false;
@@ -225,7 +225,7 @@ ringdb::ringdb(std::string filename, const std::string &genesis):
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to open rings database file '"
       + actual_filename + "': " + std::string(mdb_strerror(dbr)));
 
-  dbr = mdb_txn_begin(env, NULL, 0, &txn);
+  dbr = mdb_txn_begin(env, nullptr, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
   tx_active = true;
@@ -255,7 +255,7 @@ void ringdb::close()
     mdb_dbi_close(env, dbi_rings);
     mdb_dbi_close(env, dbi_blackballs);
     mdb_env_close(env);
-    env = NULL;
+    env = nullptr;
   }
 }
 
@@ -267,7 +267,7 @@ bool ringdb::add_rings(const crypto::chacha_key &chacha_key, const cryptonote::t
 
   dbr = resize_env(env, filename.c_str(), get_ring_data_size(tx.vin.size()));
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size");
-  dbr = mdb_txn_begin(env, NULL, 0, &txn);
+  dbr = mdb_txn_begin(env, nullptr, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
   tx_active = true;
@@ -298,7 +298,7 @@ bool ringdb::remove_rings(const crypto::chacha_key &chacha_key, const std::vecto
 
   dbr = resize_env(env, filename.c_str(), 0);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size");
-  dbr = mdb_txn_begin(env, NULL, 0, &txn);
+  dbr = mdb_txn_begin(env, nullptr, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
   tx_active = true;
@@ -317,7 +317,7 @@ bool ringdb::remove_rings(const crypto::chacha_key &chacha_key, const std::vecto
     THROW_WALLET_EXCEPTION_IF(data.mv_size <= 0, tools::error::wallet_internal_error, "Invalid ring data size");
 
     MDEBUG("Removing ring data for key image " << key_image);
-    dbr = mdb_del(txn, dbi_rings, &key, NULL);
+    dbr = mdb_del(txn, dbi_rings, &key, nullptr);
     THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to remove ring to database: " + std::string(mdb_strerror(dbr)));
   }
 
@@ -355,7 +355,7 @@ bool ringdb::get_rings(const crypto::chacha_key &chacha_key, const std::vector<c
 
   dbr = resize_env(env, filename.c_str(), 0);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
-  dbr = mdb_txn_begin(env, NULL, 0, &txn);
+  dbr = mdb_txn_begin(env, nullptr, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
   tx_active = true;
@@ -418,7 +418,7 @@ bool ringdb::set_rings(const crypto::chacha_key &chacha_key, const std::vector<s
     n_outs += e.second.size();
   dbr = resize_env(env, filename.c_str(), n_outs * 64);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
-  dbr = mdb_txn_begin(env, NULL, 0, &txn);
+  dbr = mdb_txn_begin(env, nullptr, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
   tx_active = true;
@@ -451,7 +451,7 @@ bool ringdb::blackball_worker(const std::vector<std::pair<uint64_t, uint64_t>> &
 
   dbr = resize_env(env, filename.c_str(), 32 * 2 * outputs.size()); // a pubkey, and some slack
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
-  dbr = mdb_txn_begin(env, NULL, 0, &txn);
+  dbr = mdb_txn_begin(env, nullptr, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
   epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
   tx_active = true;

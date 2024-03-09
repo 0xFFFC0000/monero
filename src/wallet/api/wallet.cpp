@@ -421,7 +421,7 @@ WalletImpl::~WalletImpl()
 {
 
     LOG_PRINT_L1(__FUNCTION__);
-    m_wallet->callback(NULL);
+    m_wallet->callback(nullptr);
     // Pause refresh thread - prevents refresh from starting again
     WalletImpl::pauseRefresh(); // Call the method directly (not polymorphically) to protect against UB in destructor.
     // Close wallet - stores cache and stops ongoing refresh operation 
@@ -2095,7 +2095,7 @@ bool WalletImpl::verifyMessageWithPublicKey(const std::string &message, const st
 
 bool WalletImpl::connectToDaemon()
 {
-    bool result = m_wallet->check_connection(NULL, NULL, DEFAULT_CONNECTION_TIMEOUT_MILLIS);
+    bool result = m_wallet->check_connection(nullptr, nullptr, DEFAULT_CONNECTION_TIMEOUT_MILLIS);
     if (!result) {
         setStatusError("Error connecting to daemon at " + m_wallet->get_daemon_address());
     } else {
@@ -2109,7 +2109,7 @@ Wallet::ConnectionStatus WalletImpl::connected() const
 {
     uint32_t version = 0;
     bool wallet_is_outdated = false, daemon_is_outdated = false;
-    m_is_connected = m_wallet->check_connection(&version, NULL, DEFAULT_CONNECTION_TIMEOUT_MILLIS, &wallet_is_outdated, &daemon_is_outdated);
+    m_is_connected = m_wallet->check_connection(&version, nullptr, DEFAULT_CONNECTION_TIMEOUT_MILLIS, &wallet_is_outdated, &daemon_is_outdated);
     if (!m_is_connected)
     {
         if (wallet_is_outdated || daemon_is_outdated)

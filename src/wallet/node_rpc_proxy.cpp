@@ -84,7 +84,7 @@ boost::optional<std::string> NodeRPCProxy::get_rpc_version(uint32_t &rpc_version
     return boost::optional<std::string>("offline");
   if (m_rpc_version == 0)
   {
-    const time_t now = time(NULL);
+    const time_t now = time(nullptr);
     cryptonote::COMMAND_RPC_GET_VERSION::request req_t = AUTO_VAL_INIT(req_t);
     cryptonote::COMMAND_RPC_GET_VERSION::response resp_t = AUTO_VAL_INIT(resp_t);
     {
@@ -120,14 +120,14 @@ boost::optional<std::string> NodeRPCProxy::get_rpc_version(uint32_t &rpc_version
 void NodeRPCProxy::set_height(uint64_t h)
 {
   m_height = h;
-  m_height_time = time(NULL);
+  m_height_time = time(nullptr);
 }
 
 boost::optional<std::string> NodeRPCProxy::get_info()
 {
   if (m_offline)
     return boost::optional<std::string>("offline");
-  const time_t now = time(NULL);
+  const time_t now = time(nullptr);
   if (now >= m_get_info_time + 30) // re-cache every 30 seconds
   {
     cryptonote::COMMAND_RPC_GET_INFO::request req_t = AUTO_VAL_INIT(req_t);
@@ -152,7 +152,7 @@ boost::optional<std::string> NodeRPCProxy::get_info()
 
 boost::optional<std::string> NodeRPCProxy::get_height(uint64_t &height)
 {
-  const time_t now = time(NULL);
+  const time_t now = time(nullptr);
   if (now < m_height_time + 30) // re-cache every 30 seconds
   {
     height = m_height;
@@ -168,7 +168,7 @@ boost::optional<std::string> NodeRPCProxy::get_height(uint64_t &height)
 
 boost::optional<std::string> NodeRPCProxy::get_target_height(uint64_t &height)
 {
-  const time_t now = time(NULL);
+  const time_t now = time(nullptr);
   if (now < m_target_height_time + 30) // re-cache every 30 seconds
   {
     height = m_target_height;

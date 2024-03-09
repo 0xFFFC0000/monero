@@ -59,14 +59,14 @@ public:
     , const boost::optional<tools::login>& login
     , const epee::net_utils::ssl_options_t& ssl_options
     , bool is_rpc = true
-    , cryptonote::core_rpc_server* rpc_server = NULL
+    , cryptonote::core_rpc_server* rpc_server = nullptr
     );
 
   bool process_command_str(const std::string& cmd);
 
   bool process_command_vec(const std::vector<std::string>& cmd);
 
-  bool start_handling(std::function<void(void)> exit_handler = NULL);
+  bool start_handling(std::function<void(void)> exit_handler = nullptr);
 
   void stop_handling();
 

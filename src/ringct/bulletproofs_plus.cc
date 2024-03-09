@@ -95,7 +95,7 @@ namespace rct
         }
         else
         {
-            return data.size() <= 95 ? straus(data, NULL, 0) : pippenger(data, NULL, 0, get_pippenger_c(data.size()));
+            return data.size() <= 95 ? straus(data, nullptr, 0) : pippenger(data, nullptr, 0, get_pippenger_c(data.size()));
         }
     }
 

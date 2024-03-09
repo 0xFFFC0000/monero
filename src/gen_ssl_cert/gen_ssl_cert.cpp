@@ -175,7 +175,7 @@ int main(int argc, char* argv[])
     tools::fail_msg_writer() << gencert::tr("Failed to write certificate: ") << ERR_reason_error_string(ERR_get_error());
     return 1;
   }
-  BUF_MEM *buf = NULL;
+  BUF_MEM *buf = nullptr;
   BIO_get_mem_ptr(bio_cert, &buf);
   if (!buf || !buf->data || !buf->length)
   {
@@ -188,14 +188,14 @@ int main(int argc, char* argv[])
 
   // write private key
   BIO *bio_pkey = BIO_new(BIO_s_mem());
-  r = PEM_write_bio_PKCS8PrivateKey(bio_pkey, pkey, private_key_passphrase.empty() ? NULL : EVP_aes_128_cfb(), private_key_passphrase.data(), private_key_passphrase.size(), NULL, NULL);
+  r = PEM_write_bio_PKCS8PrivateKey(bio_pkey, pkey, private_key_passphrase.empty() ? nullptr : EVP_aes_128_cfb(), private_key_passphrase.data(), private_key_passphrase.size(), nullptr, nullptr);
   if (!r)
   {
     BIO_free(bio_pkey);
     tools::fail_msg_writer() << gencert::tr("Failed to write private key: ") << ERR_reason_error_string(ERR_get_error());
     return 1;
   }
-  buf = NULL;
+  buf = nullptr;
   BIO_get_mem_ptr(bio_pkey, &buf);
   if (!buf || !buf->data || !buf->length)
   {

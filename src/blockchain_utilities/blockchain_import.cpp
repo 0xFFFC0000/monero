@@ -190,7 +190,7 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
 
     block_verification_context bvc = {};
 
-    core.handle_incoming_block(block_entry.block, pblocks.empty() ? NULL : &pblocks[blockidx++], bvc, false); // <--- process block
+    core.handle_incoming_block(block_entry.block, pblocks.empty() ? nullptr : &pblocks[blockidx++], bvc, false); // <--- process block
 
     if(bvc.m_verifivation_failed)
     {

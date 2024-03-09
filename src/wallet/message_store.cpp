@@ -557,7 +557,7 @@ size_t message_store::add_message(const multisig_wallet_state &state,
   m.type = type;
   m.direction = direction;
   m.content = content;
-  m.created = (uint64_t)time(NULL);
+  m.created = (uint64_t)time(nullptr);
   m.modified = m.created;
   m.sent = 0;
   m.signer_index = signer_index;
@@ -1246,7 +1246,7 @@ void message_store::set_message_processed_or_sent(uint32_t id)
   {
     m.state = message_state::sent;
   }
-  m.modified = (uint64_t)time(NULL);
+  m.modified = (uint64_t)time(nullptr);
 }
 
 void message_store::encrypt(crypto::public_key public_key, const std::string &plaintext,
@@ -1286,7 +1286,7 @@ void message_store::send_message(const multisig_wallet_state &state, uint32_t id
   transport_message dm;
   crypto::public_key public_key;
 
-  dm.timestamp = (uint64_t)time(NULL);
+  dm.timestamp = (uint64_t)time(nullptr);
   dm.subject = "MMS V0 " + tools::get_human_readable_timestamp(dm.timestamp);
   dm.source_transport_address = me.transport_address;
   dm.source_monero_address = me.monero_address;
@@ -1317,7 +1317,7 @@ void message_store::send_message(const multisig_wallet_state &state, uint32_t id
   m_transporter.send_message(dm);
 
   m.state=message_state::sent;
-  m.sent= (uint64_t)time(NULL);
+  m.sent= (uint64_t)time(nullptr);
 }
 
 bool message_store::check_for_messages(const multisig_wallet_state &state, std::vector<message> &messages)

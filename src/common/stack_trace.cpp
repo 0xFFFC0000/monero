@@ -91,7 +91,7 @@ void CXA_THROW(void *ex, CXA_THROW_INFO_T *info, void (*dest)(void*))
 {
 
   int status;
-  char *dsym = abi::__cxa_demangle(((const std::type_info*)info)->name(), NULL, NULL, &status);
+  char *dsym = abi::__cxa_demangle(((const std::type_info*)info)->name(), nullptr, nullptr, &status);
   tools::log_stack_trace((std::string("Exception: ")+((!status && dsym) ? dsym : (const char*)info)).c_str());
   free(dsym);
 
@@ -126,7 +126,7 @@ void log_stack_trace(const char *msg)
   unsigned level;
   char sym[512], *dsym;
   int status;
-  const char *log = stack_trace_log.empty() ? NULL : stack_trace_log.c_str();
+  const char *log = stack_trace_log.empty() ? nullptr : stack_trace_log.c_str();
 #endif
 
   if (msg)
@@ -158,7 +158,7 @@ void log_stack_trace(const char *msg)
       ST_LOG("  " << std::setw(4) << level << std::setbase(16) << std::setw(20) << "0x" << ip);
       continue;
     }
-    dsym = abi::__cxa_demangle(sym, NULL, NULL, &status);
+    dsym = abi::__cxa_demangle(sym, nullptr, nullptr, &status);
     ST_LOG("  " << std::setw(4) << level << std::setbase(16) << std::setw(20) << "0x" << ip << " " << (!status && dsym ? dsym : sym) << " + " << "0x" << off);
     free(dsym);
   }

@@ -1392,7 +1392,7 @@ namespace rct {
 
         for (const rctSig *rvp: rvv)
         {
-          CHECK_AND_ASSERT_MES(rvp, false, "rctSig pointer is NULL");
+          CHECK_AND_ASSERT_MES(rvp, false, "rctSig pointer is nullptr");
           const rctSig &rv = *rvp;
           CHECK_AND_ASSERT_MES(rv.type == RCTTypeSimple || rv.type == RCTTypeBulletproof || rv.type == RCTTypeBulletproof2 || rv.type == RCTTypeCLSAG || rv.type == RCTTypeBulletproofPlus,
               false, "verRctSemanticsSimple called on non simple rctSig");

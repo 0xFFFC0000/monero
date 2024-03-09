@@ -178,7 +178,7 @@ DISABLE_VS_WARNINGS(4244 4345)
     }
     else
     {
-      m_creation_timestamp = time(NULL);
+      m_creation_timestamp = time(nullptr);
     }
     return first;
   }

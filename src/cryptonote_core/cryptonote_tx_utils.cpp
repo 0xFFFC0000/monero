@@ -665,8 +665,8 @@ namespace cryptonote
     bl.timestamp = 0;
     bl.nonce = nonce;
     miner::find_nonce_for_given_block([](const cryptonote::block &b, uint64_t height, const crypto::hash *seed_hash, unsigned int threads, crypto::hash &hash){
-      return cryptonote::get_block_longhash(NULL, b, hash, height, seed_hash, threads);
-    }, bl, 1, 0, NULL);
+      return cryptonote::get_block_longhash(nullptr, b, hash, height, seed_hash, threads);
+    }, bl, 1, 0, nullptr);
     bl.invalidate_hashes();
     return true;
   }
@@ -689,7 +689,7 @@ namespace cryptonote
     if (major_version >= RX_BLOCK_VERSION)
     {
       crypto::hash hash;
-      if (pbc != NULL)
+      if (pbc != nullptr)
       {
         const uint64_t seed_height = rx_seedheight(height);
         hash = seed_hash ? *seed_hash : pbc->get_pending_block_id_by_height(seed_height);
