@@ -609,7 +609,7 @@ namespace cryptonote
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
 public:
 #endif
-      mutable tools::recursive_shared_mutex m_transactions_lock;
+    mutable epee::critical_section m_transactions_lock;  //!< lock for the pool
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
 private:
 #endif
