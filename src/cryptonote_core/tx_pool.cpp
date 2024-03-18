@@ -1921,7 +1921,7 @@ namespace cryptonote
   bool tx_memory_pool::init(size_t max_txpool_weight, bool mine_stem_txes)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
-    PassingLock blockchain_lock = boost::none;
+    PassingLock blockchain_lock = nullptr;
     RWLOCK(blockchain_lock, m_blockchain.get_lock());
 
     m_txpool_max_weight = max_txpool_weight ? max_txpool_weight : DEFAULT_TXPOOL_MAX_WEIGHT;
