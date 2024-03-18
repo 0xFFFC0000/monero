@@ -29,6 +29,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <algorithm>
+#include <boost/core/ref.hpp>
 #include <boost/none.hpp>
 #include <boost/optional/optional.hpp>
 #include <boost/thread/lock_types.hpp>
@@ -288,7 +289,7 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   CHECK_AND_ASSERT_MES(nettype != FAKECHAIN || test_options, false, "fake chain network type used without options");
 
   CRITICAL_REGION_LOCAL(m_tx_pool);
-  boost::optional<boost::shared_mutex&> lock = boost::none;
+  PassingLock lock = boost::none;
   RWLOCK(lock, m_blockchain_lock);
 
   if (db == nullptr)
@@ -553,7 +554,7 @@ bool Blockchain::deinit()
 //------------------------------------------------------------------
 // This function removes blocks from the top of blockchain.
 // It starts a batch and calls private method pop_block_from_blockchain().
-void Blockchain::pop_blocks(uint64_t nblocks, boost::optional<boost::shared_mutex&> lock)
+void Blockchain::pop_blocks(uint64_t nblocks, PassingLock lock)
 {
   uint64_t i = 0;
   CRITICAL_REGION_LOCAL(m_tx_pool);
@@ -595,7 +596,7 @@ void Blockchain::pop_blocks(uint64_t nblocks, boost::optional<boost::shared_mute
 // This function tells BlockchainDB to remove the top block from the
 // blockchain and then returns all transactions (except the miner tx, of course)
 // from it to the tx_pool
-block Blockchain::pop_block_from_blockchain(boost::optional<boost::shared_mutex&> lock)
+block Blockchain::pop_block_from_blockchain(PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock);
@@ -681,7 +682,7 @@ block Blockchain::pop_block_from_blockchain(boost::optional<boost::shared_mutex&
   return popped_block;
 }
 //------------------------------------------------------------------
-bool Blockchain::reset_and_set_genesis_block(const block& b, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::reset_and_set_genesis_block(const block& b, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock);
@@ -700,7 +701,7 @@ bool Blockchain::reset_and_set_genesis_block(const block& b, boost::optional<boo
   return bvc.m_added_to_main_chain && !bvc.m_verifivation_failed;
 }
 //------------------------------------------------------------------
-crypto::hash Blockchain::get_tail_id(uint64_t& height, boost::optional<boost::shared_mutex&> lock) const
+crypto::hash Blockchain::get_tail_id(uint64_t& height, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -729,7 +730,7 @@ crypto::hash Blockchain::get_tail_id() const
  *   powers of 2 less recent from there, so 13, 17, 25, etc...
  *
  */
-bool Blockchain::get_short_chain_history(std::list<crypto::hash>& ids, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_short_chain_history(std::list<crypto::hash>& ids, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -805,7 +806,7 @@ crypto::hash Blockchain::get_pending_block_id_by_height(uint64_t height) const
   return get_block_id_by_height(height);
 }
 //------------------------------------------------------------------
-bool Blockchain::get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -852,7 +853,7 @@ bool Blockchain::get_block_by_hash(const crypto::hash &h, block &blk, bool *orph
 // last DIFFICULTY_BLOCKS_COUNT blocks and passes them to next_difficulty,
 // returning the result of that call.  Ignores the genesis block, and can use
 // less blocks than desired if there aren't enough.
-difficulty_type Blockchain::get_difficulty_for_next_block(boost::optional<boost::shared_mutex&> lock)
+difficulty_type Blockchain::get_difficulty_for_next_block(PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 
@@ -1013,7 +1014,7 @@ std::pair<bool, uint64_t> Blockchain::check_difficulty_checkpoints() const
   return {true, res};
 }
 //------------------------------------------------------------------
-size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_height_opt, boost::optional<boost::shared_mutex&> lock)
+size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_height_opt, PassingLock lock)
 {
   if (m_fixed_difficulty)
   {
@@ -1104,7 +1105,7 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
   return new_cumulative_difficulties.size();
 }
 //------------------------------------------------------------------
-std::vector<time_t> Blockchain::get_last_block_timestamps(unsigned int blocks, boost::optional<boost::shared_mutex&> lock) const
+std::vector<time_t> Blockchain::get_last_block_timestamps(unsigned int blocks, PassingLock lock) const
 {
   RLOCK(lock, m_blockchain_lock); 
   uint64_t height = m_db->height();
@@ -1119,7 +1120,7 @@ std::vector<time_t> Blockchain::get_last_block_timestamps(unsigned int blocks, b
 // This function removes blocks from the blockchain until it gets to the
 // position where the blockchain switch started and then re-adds the blocks
 // that had been removed.
-bool Blockchain::rollback_blockchain_switching(std::list<block>& original_chain, uint64_t rollback_height, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::rollback_blockchain_switching(std::list<block>& original_chain, uint64_t rollback_height, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock); 
@@ -1163,7 +1164,7 @@ bool Blockchain::rollback_blockchain_switching(std::list<block>& original_chain,
 //------------------------------------------------------------------
 // This function attempts to switch to an alternate chain, returning
 // boolean based on success therein.
-bool Blockchain::switch_to_alternative_blockchain(std::list<block_extended_info>& alt_chain, bool discard_disconnected_chain, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::switch_to_alternative_blockchain(std::list<block_extended_info>& alt_chain, bool discard_disconnected_chain, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock);
@@ -1291,7 +1292,7 @@ bool Blockchain::switch_to_alternative_blockchain(std::list<block_extended_info>
 //------------------------------------------------------------------
 // This function calculates the difficulty target for the block being added to
 // an alternate chain.
-difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, block_extended_info& bei, boost::optional<boost::shared_mutex&> lock) const
+difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, block_extended_info& bei, PassingLock lock) const
 {
   if (m_fixed_difficulty)
   {
@@ -1399,7 +1400,7 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
 }
 //------------------------------------------------------------------
 // This function validates the miner transaction reward
-bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   //validate reward
@@ -1462,7 +1463,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 }
 //------------------------------------------------------------------
 // get the block weights of the last <count> blocks, and return by reference <sz>.
-void Blockchain::get_last_n_blocks_weights(std::vector<uint64_t>& weights, size_t count, boost::optional<boost::shared_mutex&> lock) const
+void Blockchain::get_last_n_blocks_weights(std::vector<uint64_t>& weights, size_t count, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -1477,7 +1478,7 @@ void Blockchain::get_last_n_blocks_weights(std::vector<uint64_t>& weights, size_
   weights = m_db->get_block_weights(start_offset, count);
 }
 //------------------------------------------------------------------
-uint64_t Blockchain::get_long_term_block_weight_median(uint64_t start_height, size_t count, boost::optional<boost::shared_mutex&> lock) const
+uint64_t Blockchain::get_long_term_block_weight_median(uint64_t start_height, size_t count, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock);
@@ -1547,7 +1548,7 @@ uint64_t Blockchain::get_current_cumulative_block_weight_median() const
 // in a lot of places.  That flag is not referenced in any of the code
 // nor any of the makefiles, howeve.  Need to look into whether or not it's
 // necessary at all.
-bool Blockchain::create_block_template(block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::create_block_template(block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   size_t median_weight;
@@ -1847,7 +1848,7 @@ bool Blockchain::get_miner_data(uint8_t& major_version, uint64_t& height, crypto
 //------------------------------------------------------------------
 // for an alternate chain, get the timestamps from the main chain to complete
 // the needed number of timestamps for the BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW.
-bool Blockchain::complete_timestamps_vector(uint64_t start_top_height, std::vector<uint64_t>& timestamps, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::complete_timestamps_vector(uint64_t start_top_height, std::vector<uint64_t>& timestamps, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 
@@ -1867,7 +1868,7 @@ bool Blockchain::complete_timestamps_vector(uint64_t start_top_height, std::vect
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::build_alt_chain(const crypto::hash &prev_id, std::list<block_extended_info>& alt_chain, std::vector<uint64_t> &timestamps, block_verification_context& bvc, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::build_alt_chain(const crypto::hash &prev_id, std::list<block_extended_info>& alt_chain, std::vector<uint64_t> &timestamps, block_verification_context& bvc, PassingLock lock) const
 {
     //build alternative subchain, front -> mainchain, back -> alternative head
     cryptonote::alt_block_data_t data;
@@ -1928,7 +1929,7 @@ bool Blockchain::build_alt_chain(const crypto::hash &prev_id, std::list<block_ex
 // if that chain is long enough to become the main chain and re-org accordingly
 // if so.  If not, we need to hang on to the block in case it becomes part of
 // a long forked chain eventually.
-bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id, block_verification_context& bvc, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id, block_verification_context& bvc, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock);
@@ -2152,7 +2153,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks, std::vector<cryptonote::blobdata>& txs, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks, std::vector<cryptonote::blobdata>& txs, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2174,7 +2175,7 @@ bool Blockchain::get_blocks(uint64_t start_offset, size_t count, std::vector<std
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2202,7 +2203,7 @@ bool Blockchain::get_blocks(uint64_t start_offset, size_t count, std::vector<std
 //FIXME: This function appears to want to return false if any transactions
 //       that belong with blocks are missing, but not if blocks themselves
 //       are missing.
-bool Blockchain::handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS::request& arg, NOTIFY_RESPONSE_GET_OBJECTS::request& rsp,  boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS::request& arg, NOTIFY_RESPONSE_GET_OBJECTS::request& rsp,  PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2251,7 +2252,7 @@ bool Blockchain::handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS::request& arg, NO
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_alternative_blocks(std::vector<block>& blocks, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_alternative_blocks(std::vector<block>& blocks, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2272,7 +2273,7 @@ bool Blockchain::get_alternative_blocks(std::vector<block>& blocks, boost::optio
   return true;
 }
 //------------------------------------------------------------------
-size_t Blockchain::get_alternative_blocks_count(boost::optional<boost::shared_mutex&> lock) const
+size_t Blockchain::get_alternative_blocks_count(PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2306,7 +2307,7 @@ crypto::public_key Blockchain::get_output_key(uint64_t amount, uint64_t global_i
 }
 
 //------------------------------------------------------------------
-bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2414,7 +2415,7 @@ bool Blockchain::get_output_distribution(uint64_t amount, uint64_t from_height, 
 // This function takes a list of block hashes from another node
 // on the network to find where the split point is between us and them.
 // This is used to see what to send another node that needs to sync.
-bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, uint64_t& starter_offset, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, uint64_t& starter_offset, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2491,7 +2492,7 @@ template<typename T> void reserve_container(std::list<T> &v, size_t N) { }
 //TODO: return type should be void, throw on exception
 //       alternatively, return true only if no blocks missed
 template<class t_ids_container, class t_blocks_container, class t_missed_container>
-bool Blockchain::get_blocks(const t_ids_container& block_ids, t_blocks_container& blocks, t_missed_container& missed_bs, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_blocks(const t_ids_container& block_ids, t_blocks_container& blocks, t_missed_container& missed_bs, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2575,7 +2576,7 @@ static bool fill(BlockchainDB *db, const crypto::hash &tx_hash, tx_blob_entry &t
 //------------------------------------------------------------------
 //TODO: return type should be void, throw on exception
 //       alternatively, return true only if no transactions missed
-bool Blockchain::get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<cryptonote::blobdata>& txs, std::vector<crypto::hash>& missed_txs, bool pruned, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<cryptonote::blobdata>& txs, std::vector<crypto::hash>& missed_txs, bool pruned, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2599,7 +2600,7 @@ bool Blockchain::get_transactions_blobs(const std::vector<crypto::hash>& txs_ids
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<tx_blob_entry>& txs, std::vector<crypto::hash>& missed_txs, bool pruned, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<tx_blob_entry>& txs, std::vector<crypto::hash>& missed_txs, bool pruned, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2635,7 +2636,7 @@ size_t get_transaction_version(const cryptonote::blobdata &bd)
 }
 //------------------------------------------------------------------
 template<class t_ids_container, class t_tx_container, class t_missed_container>
-bool Blockchain::get_split_transactions_blobs(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_split_transactions_blobs(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2668,7 +2669,7 @@ bool Blockchain::get_split_transactions_blobs(const t_ids_container& txs_ids, t_
 }
 //------------------------------------------------------------------
 template<class t_ids_container, class t_tx_container, class t_missed_container>
-bool Blockchain::get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, bool pruned, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, bool pruned, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2703,7 +2704,7 @@ bool Blockchain::get_transactions(const t_ids_container& txs_ids, t_tx_container
 // Find the split point between us and foreign blockchain and return
 // (by reference) the most recent common block hash along with up to
 // BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT additional (more recent) hashes.
-bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::vector<crypto::hash>& hashes, std::vector<uint64_t>* weights, uint64_t& start_height, uint64_t& current_height, bool clip_pruned, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::vector<crypto::hash>& hashes, std::vector<uint64_t>* weights, uint64_t& start_height, uint64_t& current_height, bool clip_pruned, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2741,7 +2742,7 @@ bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qbloc
   return true;
 }
 
-bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, bool clip_pruned, NOTIFY_RESPONSE_CHAIN_ENTRY::request& resp, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, bool clip_pruned, NOTIFY_RESPONSE_CHAIN_ENTRY::request& resp, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2760,7 +2761,7 @@ bool Blockchain::find_blockchain_supplement(const std::list<crypto::hash>& qbloc
 // find split point between ours and foreign blockchain (or start at
 // blockchain height <req_start_block>), and return up to max_count FULL
 // blocks by reference.
-bool Blockchain::find_blockchain_supplement(const uint64_t req_start_block, const std::list<crypto::hash>& qblock_ids, std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > >& blocks, uint64_t& total_height, uint64_t& start_height, bool pruned, bool get_miner_tx_hash, size_t max_block_count, size_t max_tx_count, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::find_blockchain_supplement(const uint64_t req_start_block, const std::list<crypto::hash>& qblock_ids, std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > >& blocks, uint64_t& total_height, uint64_t& start_height, bool pruned, bool get_miner_tx_hash, size_t max_block_count, size_t max_tx_count, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2791,7 +2792,7 @@ bool Blockchain::find_blockchain_supplement(const uint64_t req_start_block, cons
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::add_block_as_invalid(const block& bl, const crypto::hash& h, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::add_block_as_invalid(const block& bl, const crypto::hash& h, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   block_extended_info bei = AUTO_VAL_INIT(bei);
@@ -2799,7 +2800,7 @@ bool Blockchain::add_block_as_invalid(const block& bl, const crypto::hash& h, bo
   return add_block_as_invalid(bei, h, lock);
 }
 //------------------------------------------------------------------
-bool Blockchain::add_block_as_invalid(const block_extended_info& bei, const crypto::hash& h, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::add_block_as_invalid(const block_extended_info& bei, const crypto::hash& h, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock);
@@ -2809,7 +2810,7 @@ bool Blockchain::add_block_as_invalid(const block_extended_info& bei, const cryp
   return true;
 }
 //------------------------------------------------------------------
-void Blockchain::flush_invalid_blocks(boost::optional<boost::shared_mutex&> lock)
+void Blockchain::flush_invalid_blocks(PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RWLOCK(lock, m_blockchain_lock);
@@ -2848,13 +2849,13 @@ bool Blockchain::have_block_unlocked(const crypto::hash& id, int *where) const
   return false;
 }
 //------------------------------------------------------------------
-bool Blockchain::have_block(const crypto::hash& id, int *where, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::have_block(const crypto::hash& id, int *where, PassingLock lock) const
 {
   RWLOCK(lock, m_blockchain_lock);
   return have_block_unlocked(id, where);
 }
 //------------------------------------------------------------------
-bool Blockchain::handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify/* = true*/, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify/* = true*/, PassingLock lock)
 {
     LOG_PRINT_L3("Blockchain::" << __func__);
     crypto::hash id = get_block_hash(bl);
@@ -2877,7 +2878,7 @@ size_t Blockchain::get_total_transactions() const
 // This container should be managed by the code that validates blocks so we don't
 // have to store the used keys in a given block in the permanent storage only to
 // remove them later if the block fails validation.
-bool Blockchain::check_for_double_spend(const transaction& tx, key_images_container& keys_this_block, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::check_for_double_spend(const transaction& tx, key_images_container& keys_this_block, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2937,7 +2938,7 @@ bool Blockchain::check_for_double_spend(const transaction& tx, key_images_contai
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<uint64_t>>& indexs, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<uint64_t>>& indexs, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2953,7 +2954,7 @@ bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -2995,7 +2996,7 @@ void Blockchain::on_new_tx_from_block(const cryptonote::transaction &tx)
 // This function overloads its sister function with
 // an extra value (hash of highest block that holds an output used as input)
 // as a return-by-reference.
-bool Blockchain::check_tx_inputs(transaction& tx, uint64_t& max_used_block_height, crypto::hash& max_used_block_id, tx_verification_context &tvc, bool kept_by_block, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::check_tx_inputs(transaction& tx, uint64_t& max_used_block_height, crypto::hash& max_used_block_id, tx_verification_context &tvc, bool kept_by_block, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -3025,7 +3026,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, uint64_t& max_used_block_heigh
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context &tvc, boost::optional<boost::shared_mutex&> lock) const
+bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context &tvc, PassingLock lock) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   RLOCK(lock, m_blockchain_lock);
@@ -4080,7 +4081,7 @@ bool Blockchain::check_block_timestamp(const block& b, uint64_t& median_ts) cons
   return check_block_timestamp(timestamps, b, median_ts);
 }
 //------------------------------------------------------------------
-void Blockchain::return_tx_to_pool(std::vector<std::pair<transaction, blobdata>> &txs, boost::optional<boost::shared_mutex&> lock)
+void Blockchain::return_tx_to_pool(std::vector<std::pair<transaction, blobdata>> &txs, PassingLock lock)
 {
   uint8_t version = get_current_hard_fork_version();
   for (auto& tx : txs)
@@ -4125,7 +4126,7 @@ bool Blockchain::flush_txes_from_pool(const std::vector<crypto::hash> &txids)
 //      Needs to validate the block and acquire each transaction from the
 //      transaction mem_pool, then pass the block and transactions to
 //      m_db->add_block()
-bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, bool notify/* = true*/, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, bool notify/* = true*/, PassingLock lock)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 
@@ -4530,7 +4531,7 @@ leave:
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::prune_blockchain(uint32_t pruning_seed, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::prune_blockchain(uint32_t pruning_seed, PassingLock lock)
 {
   m_tx_pool.lock();
   epee::misc_utils::auto_scope_leave_caller unlocker = epee::misc_utils::create_scope_leave_handler([&](){m_tx_pool.unlock();});
@@ -4538,7 +4539,7 @@ bool Blockchain::prune_blockchain(uint32_t pruning_seed, boost::optional<boost::
   return m_db->prune_blockchain(pruning_seed);
 }
 //------------------------------------------------------------------
-bool Blockchain::update_blockchain_pruning(boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::update_blockchain_pruning(PassingLock lock)
 {
   m_tx_pool.lock();
   epee::misc_utils::auto_scope_leave_caller unlocker = epee::misc_utils::create_scope_leave_handler([&](){m_tx_pool.unlock();});
@@ -4546,7 +4547,7 @@ bool Blockchain::update_blockchain_pruning(boost::optional<boost::shared_mutex&>
   return m_db->update_pruning();
 }
 //------------------------------------------------------------------
-bool Blockchain::check_blockchain_pruning(boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::check_blockchain_pruning(PassingLock lock)
 {
   m_tx_pool.lock();
   epee::misc_utils::auto_scope_leave_caller unlocker = epee::misc_utils::create_scope_leave_handler([&](){m_tx_pool.unlock();});
@@ -4555,7 +4556,7 @@ bool Blockchain::check_blockchain_pruning(boost::optional<boost::shared_mutex&> 
 }
 //------------------------------------------------------------------
 // returns min(Mb, 1.7*Ml) as per https://github.com/ArticMine/Monero-Documents/blob/master/MoneroScaling2021-02.pdf from HF_VERSION_LONG_TERM_BLOCK_WEIGHT
-uint64_t Blockchain::get_next_long_term_block_weight(uint64_t block_weight, boost::optional<boost::shared_mutex&> lock) const
+uint64_t Blockchain::get_next_long_term_block_weight(uint64_t block_weight, PassingLock lock) const
 {
   PERF_TIMER(get_next_long_term_block_weight);
 
@@ -4586,7 +4587,7 @@ uint64_t Blockchain::get_next_long_term_block_weight(uint64_t block_weight, boos
   return long_term_block_weight;
 }
 //------------------------------------------------------------------
-bool Blockchain::update_next_cumulative_weight_limit(uint64_t *long_term_effective_median_block_weight, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::update_next_cumulative_weight_limit(uint64_t *long_term_effective_median_block_weight, PassingLock lock)
 {
   PERF_TIMER(update_next_cumulative_weight_limit);
 
@@ -4645,7 +4646,7 @@ bool Blockchain::update_next_cumulative_weight_limit(uint64_t *long_term_effecti
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc, PassingLock lock)
 {
   try
   {
@@ -4689,7 +4690,7 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc,
 //------------------------------------------------------------------
 //TODO: Refactor, consider returning a failure height and letting
 //      caller decide course of action.
-void Blockchain::check_against_checkpoints(const checkpoints& points, bool enforce, boost::optional<boost::shared_mutex&> lock)
+void Blockchain::check_against_checkpoints(const checkpoints& points, bool enforce, PassingLock lock)
 {
   const auto& pts = points.get_points();
   bool stop_batch;
@@ -4787,7 +4788,7 @@ void Blockchain::block_longhash_worker(uint64_t height, const epee::span<const b
 }
 
 //------------------------------------------------------------------
-bool Blockchain::cleanup_handle_incoming_blocks(bool force_sync, boost::optional<boost::shared_mutex&> lock)
+bool Blockchain::cleanup_handle_incoming_blocks(bool force_sync, PassingLock lock)
 {
   bool success = false;
 
@@ -4880,7 +4881,7 @@ void Blockchain::output_scan_worker(const uint64_t amount, const std::vector<uin
   }
 }
 
-uint64_t Blockchain::prevalidate_block_hashes(uint64_t height, const std::vector<crypto::hash> &hashes, const std::vector<uint64_t> &weights, boost::optional<boost::shared_mutex&> lock)
+uint64_t Blockchain::prevalidate_block_hashes(uint64_t height, const std::vector<crypto::hash> &hashes, const std::vector<uint64_t> &weights, PassingLock lock)
 {
   // new: . . . . . X X X X X . . . . . .
   // pre: A A A A B B B B C C C C D D D D
@@ -5043,7 +5044,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
 
   m_tx_pool.lock();
   // This locking is special case, lets handle it manually
-  boost::optional<boost::shared_mutex&> lock = boost::none;
+  PassingLock lock = boost::none;
   RWLOCK(lock, m_blockchain_lock);
 
   if(blocks_entry.size() == 0)
@@ -5427,7 +5428,7 @@ void Blockchain::set_user_options(uint64_t maxthreads, bool sync_on_blocks, uint
   m_max_prepare_blocks_threads = maxthreads;
 }
 
-void Blockchain::add_block_notify(BlockNotifyCallback&& notify, boost::optional<boost::shared_mutex&> lock)
+void Blockchain::add_block_notify(BlockNotifyCallback&& notify, PassingLock lock)
 {
   if (notify)
   {
@@ -5436,7 +5437,7 @@ void Blockchain::add_block_notify(BlockNotifyCallback&& notify, boost::optional<
   }
 }
 
-void Blockchain::add_miner_notify(MinerNotifyCallback&& notify, boost::optional<boost::shared_mutex&> lock)
+void Blockchain::add_miner_notify(MinerNotifyCallback&& notify, PassingLock lock)
 {
   if (notify)
   {
@@ -5541,7 +5542,7 @@ void Blockchain::cancel()
 
 #if defined(PER_BLOCK_CHECKPOINT)
 static const char expected_block_hashes_hash[] = "e9371004b9f6be59921b27bc81e28b4715845ade1c6d16891d5c455f72e21365";
-void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints, boost::optional<boost::shared_mutex&> lock)
+void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints, PassingLock lock)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)
   {
@@ -5702,7 +5703,7 @@ void Blockchain::cache_block_template(const block &b, const cryptonote::account_
   m_btc_valid = true;
 }
 
-void Blockchain::send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins, boost::optional<boost::shared_mutex&> lock)
+void Blockchain::send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins, PassingLock lock)
 {
   if (m_miner_notifiers.empty())
     return;
@@ -5721,6 +5722,6 @@ void Blockchain::send_miner_notifications(uint64_t height, const crypto::hash &s
 }
 
 namespace cryptonote {
-template bool Blockchain::get_transactions(const std::vector<crypto::hash>&, std::vector<transaction>&, std::vector<crypto::hash>&, bool, boost::optional<boost::shared_mutex&>) const;
-template bool Blockchain::get_split_transactions_blobs(const std::vector<crypto::hash>&, std::vector<std::tuple<crypto::hash, cryptonote::blobdata, crypto::hash, cryptonote::blobdata>>&, std::vector<crypto::hash>&, boost::optional<boost::shared_mutex&>) const;
+template bool Blockchain::get_transactions(const std::vector<crypto::hash>&, std::vector<transaction>&, std::vector<crypto::hash>&, bool, PassingLock) const;
+template bool Blockchain::get_split_transactions_blobs(const std::vector<crypto::hash>&, std::vector<std::tuple<crypto::hash, cryptonote::blobdata, crypto::hash, cryptonote::blobdata>>&, std::vector<crypto::hash>&, PassingLock) const;
 }

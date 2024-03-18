@@ -38,6 +38,7 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
 #include <boost/thread/thread.hpp>
+#include <boost/optional.hpp>
 #include <cstdint>
 #include <queue>
 #include <set>
@@ -167,33 +168,35 @@ namespace epee
 
 #define  CRITICAL_REGION_END() }
 
-#define RWLOCK(optional, m_mutex)                                        \
-    LOG_PRINT_L4(                                                          \
-        "RWLOCK : " << __func__ << " : " << boost::this_thread::get_id()); \
-    epee::misc_utils::auto_scope_leave_caller                              \
-        scope_rw_exit_handler_##optional;                                  \
-    if (!optional)                                                         \
-      {                                                                    \
-        m_mutex.lock();                                                    \
-        optional = boost::make_optional<boost::shared_mutex&>(m_mutex);    \
-        scope_rw_exit_handler_##optional =                                 \
-            epee::misc_utils::create_scope_leave_handler(                  \
-                [&]() { m_mutex.unlock(); });                              \
-      }
+typedef boost::optional<boost::reference_wrapper<boost::shared_mutex>> PassingLock;
 
-#define RLOCK(optional, m_mutex)                                             \
-    LOG_PRINT_L4(                                                              \
-        "RLOCK : " << __func__ << " : " << boost::this_thread::get_id());      \
-    epee::misc_utils::auto_scope_leave_caller scope_r_exit_handler_##optional; \
-    if (!optional)                                                             \
-      {                                                                        \
-        m_mutex.lock_shared();                                                 \
-        optional = boost::make_optional<boost::shared_mutex&>(m_mutex);        \
-        scope_r_exit_handler_##optional =                                      \
-            epee::misc_utils::create_scope_leave_handler(                      \
-                [&]() { m_mutex.unlock_shared(); });                           \
-      }
+#define RWLOCK(passinglock, m_mutex)                                     \
+  LOG_PRINT_L4(                                                          \
+      "RWLOCK : " << __func__ << " : " << boost::this_thread::get_id()); \
+  epee::misc_utils::auto_scope_leave_caller                              \
+      scope_rw_exit_handler_##passinglock;                               \
+  if (!passinglock)                                                      \
+    {                                                                    \
+      m_mutex.lock();                                                    \
+      passinglock = boost::make_optional(boost::ref(m_mutex));           \
+      scope_rw_exit_handler_##passinglock =                              \
+          epee::misc_utils::create_scope_leave_handler(                  \
+              [&]() { m_mutex.unlock(); });                              \
+    }
 
+#define RLOCK(passinglock, m_mutex)                                     \
+  LOG_PRINT_L4(                                                         \
+      "RLOCK : " << __func__ << " : " << boost::this_thread::get_id()); \
+  epee::misc_utils::auto_scope_leave_caller                             \
+      scope_r_exit_handler_##passinglock;                               \
+  if (!passinglock)                                                     \
+    {                                                                   \
+      m_mutex.lock_shared();                                            \
+      passinglock = boost::make_optional(boost::ref(m_mutex));          \
+      scope_r_exit_handler_##passinglock =                              \
+          epee::misc_utils::create_scope_leave_handler(                 \
+              [&]() { m_mutex.unlock_shared(); });                      \
+    }
 }
 
 #endif
