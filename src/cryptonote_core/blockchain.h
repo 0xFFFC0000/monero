@@ -350,7 +350,7 @@ namespace cryptonote
      *
      * @return true on successful addition to the blockchain, else false
      */
-    bool add_new_block(const block& bl_, block_verification_context& bvc, PassingLock lock = nullptr);
+    bool add_new_block(const block& bl_, block_verification_context& bvc, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief clears the blockchain and starts a new one
@@ -784,7 +784,7 @@ namespace cryptonote
      * @param points the checkpoints to check against
      * @param enforce whether or not to take action on failure
      */
-    void check_against_checkpoints(const checkpoints& points, bool enforce, PassingLock lock = nullptr);
+    void check_against_checkpoints(const checkpoints& points, bool enforce, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief configure whether or not to enforce DNS-based checkpoints
@@ -801,7 +801,7 @@ namespace cryptonote
      *
      * @return false if any enforced checkpoint type fails to load, otherwise true
      */
-    bool update_checkpoints(const std::string& file_path, bool check_dns);
+    bool update_checkpoints(const std::string& file_path, bool check_dns, PassingLock txpool_lock = nullptr);
 
 
     // user options, must be called before calling init()
@@ -940,7 +940,7 @@ namespace cryptonote
      *
      * @return false if any removals fail, otherwise true
      */
-    bool flush_txes_from_pool(const std::vector<crypto::hash> &txids);
+    bool flush_txes_from_pool(const std::vector<crypto::hash> &txids, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief return a histogram of outputs on the blockchain
@@ -1090,7 +1090,7 @@ namespace cryptonote
      *
      * @param nblocks number of blocks to be removed
      */
-    void pop_blocks(uint64_t nblocks, PassingLock lock = nullptr);
+    void pop_blocks(uint64_t nblocks, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief checks whether a given block height is included in the precompiled block hash area
@@ -1318,14 +1318,14 @@ namespace cryptonote
      *
      * @return false if the reorganization fails, otherwise true
      */
-    bool switch_to_alternative_blockchain(std::list<block_extended_info>& alt_chain, bool discard_disconnected_chain, PassingLock lock = nullptr);
+    bool switch_to_alternative_blockchain(std::list<block_extended_info>& alt_chain, bool discard_disconnected_chain, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief removes the most recent block from the blockchain
      *
      * @return the block removed
      */
-    block pop_block_from_blockchain(PassingLock lock = nullptr);
+    block pop_block_from_blockchain(PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief validate and add a new block to the end of the blockchain
@@ -1340,7 +1340,7 @@ namespace cryptonote
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify = true, PassingLock lock = nullptr);
+    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify = true, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief validate and add a new block to the end of the blockchain
@@ -1356,7 +1356,7 @@ namespace cryptonote
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, bool notify = true, PassingLock lock = nullptr);
+    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, bool notify = true, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief validate and add a new block to an alternate blockchain
@@ -1371,7 +1371,7 @@ namespace cryptonote
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_alternative_block(const block& b, const crypto::hash& id, block_verification_context& bvc, PassingLock lock = nullptr);
+    bool handle_alternative_block(const block& b, const crypto::hash& id, block_verification_context& bvc, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief builds a list of blocks connecting a block to the main chain
@@ -1439,7 +1439,7 @@ namespace cryptonote
      *
      * @return false if something goes wrong with reverting (very bad), otherwise true
      */
-    bool rollback_blockchain_switching(std::list<block>& original_chain, uint64_t rollback_height, PassingLock lock = nullptr);
+    bool rollback_blockchain_switching(std::list<block>& original_chain, uint64_t rollback_height, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief gets recent block weights for median calculation
@@ -1556,7 +1556,7 @@ namespace cryptonote
      * @return true
      */
     bool update_next_cumulative_weight_limit(uint64_t *long_term_effective_median_block_weight = NULL, PassingLock lock = nullptr);
-    void return_tx_to_pool(std::vector<std::pair<transaction, blobdata>> &txs, PassingLock lock = nullptr);
+    void return_tx_to_pool(std::vector<std::pair<transaction, blobdata>> &txs, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief make sure a transaction isn't attempting a double-spend
@@ -1589,7 +1589,7 @@ namespace cryptonote
      * 
      * @param get_checkpoints if set, will be called to get checkpoints data
      */
-    void load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints, PassingLock lock = nullptr);
+    void load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief invalidates any cached block template
@@ -1611,7 +1611,7 @@ namespace cryptonote
      * @param prev_id hash of new blockchain tip
      * @param already_generated_coins total coins mined by the network so far
      */
-    void send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins, PassingLock lock = nullptr);
+    void send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     friend struct BlockchainAndPool;
   };

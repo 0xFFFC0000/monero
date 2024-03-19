@@ -198,7 +198,6 @@ typedef boost::shared_mutex* PassingLock;
           });                                                              \
     }
 
-
 }
 
 #endif
