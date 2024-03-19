@@ -41,6 +41,7 @@
 #include <boost/multi_index/global_fun.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/member.hpp>
+#include <boost/optional.hpp>
 #include <atomic>
 #include <functional>
 #include <unordered_map>
@@ -93,6 +94,8 @@ namespace cryptonote
 
   typedef boost::function<void(uint64_t /* height */, epee::span<const block> /* blocks */)> BlockNotifyCallback;
   typedef boost::function<void(uint8_t /* major_version */, uint64_t /* height */, const crypto::hash& /* prev_id */, const crypto::hash& /* seed_hash */, difficulty_type /* diff */, uint64_t /* median_weight */, uint64_t /* already_generated_coins */, const std::vector<tx_block_template_backlog_entry>& /* tx_backlog */)> MinerNotifyCallback;
+
+  using epee::PassingLock;
 
   /************************************************************************/
   /*                                                                      */
@@ -176,7 +179,7 @@ namespace cryptonote
      *
      * @return false if start_offset > blockchain height, else true
      */
-    bool get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks, std::vector<cryptonote::blobdata>& txs) const;
+    bool get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks, std::vector<cryptonote::blobdata>& txs, PassingLock lock = nullptr) const;
 
     /**
      * @brief get blocks from blocks based on start height and count
@@ -187,7 +190,7 @@ namespace cryptonote
      *
      * @return false if start_offset > blockchain height, else true
      */
-    bool get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks) const;
+    bool get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata,block>>& blocks, PassingLock lock = nullptr) const;
 
     /**
      * @brief compiles a list of all blocks stored as alternative chains
@@ -196,14 +199,14 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_alternative_blocks(std::vector<block>& blocks) const;
+    bool get_alternative_blocks(std::vector<block>& blocks, PassingLock lock = nullptr) const;
 
     /**
      * @brief returns the number of alternative blocks stored
      *
      * @return the number of alternative blocks stored
      */
-    size_t get_alternative_blocks_count() const;
+    size_t get_alternative_blocks_count(PassingLock lock = nullptr) const;
 
     /**
      * @brief gets a block's hash given a height
@@ -235,7 +238,7 @@ namespace cryptonote
      *
      * @return true if the block was found, else false
      */
-    bool get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan = NULL) const;
+    bool get_block_by_hash(const crypto::hash &h, block &blk, bool *orphan = NULL, PassingLock lock = nullptr) const;
 
     /**
      * @brief performs some preprocessing on a group of incoming blocks to speed up verification
@@ -254,7 +257,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool cleanup_handle_incoming_blocks(bool force_sync = false);
+    bool cleanup_handle_incoming_blocks(bool force_sync = false, PassingLock lock = nullptr);
 
     /**
      * @brief search the blockchain for a transaction by hash
@@ -309,14 +312,14 @@ namespace cryptonote
      *
      * @return the hash
      */
-    crypto::hash get_tail_id(uint64_t& height) const;
+    crypto::hash get_tail_id(uint64_t& height, PassingLock lock = nullptr) const;
 
     /**
      * @brief returns the difficulty target the next block to be added must meet
      *
      * @return the target
      */
-    difficulty_type get_difficulty_for_next_block();
+    difficulty_type get_difficulty_for_next_block(PassingLock lock = nullptr);
 
     /**
      * @brief check currently stored difficulties against difficulty checkpoints
@@ -332,7 +335,7 @@ namespace cryptonote
      *
      * @return number of blocks whose difficulties got corrected
      */
-    size_t recalculate_difficulties(boost::optional<uint64_t> start_height = boost::none);
+    size_t recalculate_difficulties(boost::optional<uint64_t> start_height = boost::none, PassingLock lock = nullptr);
 
     /**
      * @brief adds a block to the blockchain
@@ -347,7 +350,7 @@ namespace cryptonote
      *
      * @return true on successful addition to the blockchain, else false
      */
-    bool add_new_block(const block& bl_, block_verification_context& bvc);
+    bool add_new_block(const block& bl_, block_verification_context& bvc, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief clears the blockchain and starts a new one
@@ -356,7 +359,7 @@ namespace cryptonote
      *
      * @return true on success, else false
      */
-    bool reset_and_set_genesis_block(const block& b);
+    bool reset_and_set_genesis_block(const block& b, PassingLock lock = nullptr);
 
     /**
      * @brief creates a new block to mine against
@@ -372,7 +375,7 @@ namespace cryptonote
      * @return true if block template filled in successfully, else false
      */
     bool create_block_template(block& b, const account_public_address& miner_address, difficulty_type& di, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash);
-    bool create_block_template(block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& di, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash);
+    bool create_block_template(block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& di, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce, uint64_t &seed_height, crypto::hash &seed_hash, PassingLock lock = nullptr);
 
     /**
      * @brief gets data required to create a block template and start mining on it
@@ -402,7 +405,7 @@ namespace cryptonote
      * @return true if the block is known, else false
      */
     bool have_block_unlocked(const crypto::hash& id, int *where = NULL) const;
-    bool have_block(const crypto::hash& id, int *where = NULL) const;
+    bool have_block(const crypto::hash& id, int *where = NULL, PassingLock lock = nullptr) const;
 
     /**
      * @brief gets the total number of transactions on the main chain
@@ -425,7 +428,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_short_chain_history(std::list<crypto::hash>& ids) const;
+    bool get_short_chain_history(std::list<crypto::hash>& ids, PassingLock lock = nullptr) const;
 
     /**
      * @brief get recent block hashes for a foreign chain
@@ -443,7 +446,7 @@ namespace cryptonote
      *
      * @return true if a block found in common, else false
      */
-    bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::vector<crypto::hash>& hashes, std::vector<uint64_t>* weights, uint64_t& start_height, uint64_t& current_height, bool clip_pruned) const;
+    bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::vector<crypto::hash>& hashes, std::vector<uint64_t>* weights, uint64_t& start_height, uint64_t& current_height, bool clip_pruned, PassingLock lock = nullptr) const;
 
     /**
      * @brief get recent block hashes for a foreign chain
@@ -458,7 +461,7 @@ namespace cryptonote
      *
      * @return true if a block found in common, else false
      */
-    bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, bool clip_pruned, NOTIFY_RESPONSE_CHAIN_ENTRY::request& resp) const;
+    bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, bool clip_pruned, NOTIFY_RESPONSE_CHAIN_ENTRY::request& resp, PassingLock lock = nullptr) const;
 
     /**
      * @brief find the most recent common point between ours and a foreign chain
@@ -472,7 +475,7 @@ namespace cryptonote
      *
      * @return true if a block found in common, else false
      */
-    bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, uint64_t& starter_offset) const;
+    bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, uint64_t& starter_offset, PassingLock lock = nullptr) const;
 
     /**
      * @brief get recent blocks for a foreign chain
@@ -492,7 +495,7 @@ namespace cryptonote
      *
      * @return true if a block found in common or req_start_block specified, else false
      */
-    bool find_blockchain_supplement(const uint64_t req_start_block, const std::list<crypto::hash>& qblock_ids, std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > >& blocks, uint64_t& total_height, uint64_t& start_height, bool pruned, bool get_miner_tx_hash, size_t max_block_count, size_t max_tx_count) const;
+    bool find_blockchain_supplement(const uint64_t req_start_block, const std::list<crypto::hash>& qblock_ids, std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > >& blocks, uint64_t& total_height, uint64_t& start_height, bool pruned, bool get_miner_tx_hash, size_t max_block_count, size_t max_tx_count, PassingLock lock = nullptr) const;
 
     /**
      * @brief retrieves a set of blocks and their transactions, and possibly other transactions
@@ -506,7 +509,7 @@ namespace cryptonote
      *
      * @return true unless any blocks or transactions are missing
      */
-    bool handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS::request& arg, NOTIFY_RESPONSE_GET_OBJECTS::request& rsp);
+    bool handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS::request& arg, NOTIFY_RESPONSE_GET_OBJECTS::request& rsp, PassingLock lock = nullptr);
 
     /**
      * @brief get number of outputs of an amount past the minimum spendable age
@@ -540,7 +543,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res) const;
+    bool get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res, PassingLock lock = nullptr) const;
 
     /**
      * @brief gets an output's key and unlocked state
@@ -577,8 +580,8 @@ namespace cryptonote
      *
      * @return false if the transaction does not exist, or if no indices are found, otherwise true
      */
-    bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs) const;
-    bool get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<uint64_t>>& indexs) const;
+    bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs, PassingLock lock = nullptr) const;
+    bool get_tx_outputs_gindexs(const crypto::hash& tx_id, size_t n_txes, std::vector<std::vector<uint64_t>>& indexs, PassingLock lock = nullptr) const;
 
     /**
      * @brief stores the blockchain
@@ -615,7 +618,7 @@ namespace cryptonote
      *
      * @return false if any input is invalid, otherwise true
      */
-    bool check_tx_inputs(transaction& tx, uint64_t& pmax_used_block_height, crypto::hash& max_used_block_id, tx_verification_context &tvc, bool kept_by_block = false) const;
+    bool check_tx_inputs(transaction& tx, uint64_t& pmax_used_block_height, crypto::hash& max_used_block_id, tx_verification_context &tvc, bool kept_by_block = false, PassingLock lock = nullptr) const;
 
     /**
      * @brief get fee quantization mask
@@ -701,7 +704,7 @@ namespace cryptonote
      *
      * @return false if any outputs do not conform, otherwise true
      */
-    bool check_tx_outputs(const transaction& tx, tx_verification_context &tvc) const;
+    bool check_tx_outputs(const transaction& tx, tx_verification_context &tvc, PassingLock lock = nullptr) const;
 
     /**
      * @brief gets the block weight limit based on recent blocks
@@ -715,7 +718,7 @@ namespace cryptonote
      *
      * @return the long term block weight
      */
-    uint64_t get_next_long_term_block_weight(uint64_t block_weight) const;
+    uint64_t get_next_long_term_block_weight(uint64_t block_weight, PassingLock lock = nullptr) const;
 
     /**
      * @brief gets the block weight median based on recent blocks (same window as for the limit)
@@ -746,7 +749,7 @@ namespace cryptonote
      * @return false if an unexpected exception occurs, else true
      */
     template<class t_ids_container, class t_blocks_container, class t_missed_container>
-    bool get_blocks(const t_ids_container& block_ids, t_blocks_container& blocks, t_missed_container& missed_bs) const;
+    bool get_blocks(const t_ids_container& block_ids, t_blocks_container& blocks, t_missed_container& missed_bs, PassingLock lock = nullptr) const;
 
     /**
      * @brief gets transactions based on a list of transaction hashes
@@ -761,12 +764,12 @@ namespace cryptonote
      *
      * @return false if an unexpected exception occurs, else true
      */
-    bool get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<cryptonote::blobdata>& txs, std::vector<crypto::hash>& missed_txs, bool pruned = false) const;
-    bool get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<tx_blob_entry>& txs, std::vector<crypto::hash>& missed_txs, bool pruned = false) const;
+    bool get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<cryptonote::blobdata>& txs, std::vector<crypto::hash>& missed_txs, bool pruned = false, PassingLock lock = nullptr) const;
+    bool get_transactions_blobs(const std::vector<crypto::hash>& txs_ids, std::vector<tx_blob_entry>& txs, std::vector<crypto::hash>& missed_txs, bool pruned = false, PassingLock lock = nullptr) const;
     template<class t_ids_container, class t_tx_container, class t_missed_container>
-    bool get_split_transactions_blobs(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs) const;
+    bool get_split_transactions_blobs(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, PassingLock lock = nullptr) const;
     template<class t_ids_container, class t_tx_container, class t_missed_container>
-    bool get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, bool pruned = false) const;
+    bool get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, bool pruned = false, PassingLock lock = nullptr) const;
 
     //debug functions
 
@@ -781,7 +784,7 @@ namespace cryptonote
      * @param points the checkpoints to check against
      * @param enforce whether or not to take action on failure
      */
-    void check_against_checkpoints(const checkpoints& points, bool enforce);
+    void check_against_checkpoints(const checkpoints& points, bool enforce, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief configure whether or not to enforce DNS-based checkpoints
@@ -798,7 +801,7 @@ namespace cryptonote
      *
      * @return false if any enforced checkpoint type fails to load, otherwise true
      */
-    bool update_checkpoints(const std::string& file_path, bool check_dns);
+    bool update_checkpoints(const std::string& file_path, bool check_dns, PassingLock txpool_lock = nullptr);
 
 
     // user options, must be called before calling init()
@@ -820,14 +823,14 @@ namespace cryptonote
      *
      * @param notify the notify object to call at every new block
      */
-    void add_block_notify(BlockNotifyCallback&& notify);
+    void add_block_notify(BlockNotifyCallback&& notify, PassingLock lock = nullptr);
 
     /**
      * @brief sets a miner notify object to call for every new block
      *
      * @param notify the notify object to call at every new block
      */
-    void add_miner_notify(MinerNotifyCallback&& notify);
+    void add_miner_notify(MinerNotifyCallback&& notify, PassingLock lock = nullptr);
 
     /**
      * @brief sets a reorg notify object to call for every reorg
@@ -937,7 +940,7 @@ namespace cryptonote
      *
      * @return false if any removals fail, otherwise true
      */
-    bool flush_txes_from_pool(const std::vector<crypto::hash> &txids);
+    bool flush_txes_from_pool(const std::vector<crypto::hash> &txids, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief return a histogram of outputs on the blockchain
@@ -1058,14 +1061,15 @@ namespace cryptonote
     bool txpool_tx_matches_category(const crypto::hash& tx_hash, relay_category category);
 
     bool is_within_compiled_block_hash_area() const { return is_within_compiled_block_hash_area(m_db->height()); }
-    uint64_t prevalidate_block_hashes(uint64_t height, const std::vector<crypto::hash> &hashes, const std::vector<uint64_t> &weights);
+    uint64_t prevalidate_block_hashes(uint64_t height, const std::vector<crypto::hash> &hashes, const std::vector<uint64_t> &weights, PassingLock lock = nullptr);
     uint32_t get_blockchain_pruning_seed() const { return m_db->get_blockchain_pruning_seed(); }
-    bool prune_blockchain(uint32_t pruning_seed = 0);
-    bool update_blockchain_pruning();
-    bool check_blockchain_pruning();
+    bool prune_blockchain(uint32_t pruning_seed = 0, PassingLock lock = nullptr);
+    bool update_blockchain_pruning(PassingLock lock = nullptr);
+    bool check_blockchain_pruning(PassingLock lock = nullptr);
 
     void lock();
     void unlock();
+    boost::shared_mutex* get_lock();
 
     void cancel();
 
@@ -1079,14 +1083,14 @@ namespace cryptonote
     /**
      * @brief returns the timestamps of the last N blocks
      */
-    std::vector<time_t> get_last_block_timestamps(unsigned int blocks) const;
+    std::vector<time_t> get_last_block_timestamps(unsigned int blocks, PassingLock lock = nullptr) const;
 
     /**
      * @brief removes blocks from the top of the blockchain
      *
      * @param nblocks number of blocks to be removed
      */
-    void pop_blocks(uint64_t nblocks);
+    void pop_blocks(uint64_t nblocks, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief checks whether a given block height is included in the precompiled block hash area
@@ -1106,7 +1110,7 @@ namespace cryptonote
     /**
      * @brief flush the invalid blocks set
      */
-    void flush_invalid_blocks();
+    void flush_invalid_blocks(PassingLock lock = nullptr);
 
     /**
      * @brief get the "adjusted time"
@@ -1139,7 +1143,7 @@ namespace cryptonote
 
     tx_memory_pool& m_tx_pool;
 
-    mutable epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
+    mutable boost::shared_mutex m_blockchain_lock;
 
     // main chain
     size_t m_current_block_cumul_weight_limit;
@@ -1314,14 +1318,14 @@ namespace cryptonote
      *
      * @return false if the reorganization fails, otherwise true
      */
-    bool switch_to_alternative_blockchain(std::list<block_extended_info>& alt_chain, bool discard_disconnected_chain);
+    bool switch_to_alternative_blockchain(std::list<block_extended_info>& alt_chain, bool discard_disconnected_chain, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief removes the most recent block from the blockchain
      *
      * @return the block removed
      */
-    block pop_block_from_blockchain();
+    block pop_block_from_blockchain(PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief validate and add a new block to the end of the blockchain
@@ -1336,7 +1340,7 @@ namespace cryptonote
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify = true);
+    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify = true, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief validate and add a new block to the end of the blockchain
@@ -1352,7 +1356,7 @@ namespace cryptonote
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, bool notify = true);
+    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, bool notify = true, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief validate and add a new block to an alternate blockchain
@@ -1367,7 +1371,7 @@ namespace cryptonote
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_alternative_block(const block& b, const crypto::hash& id, block_verification_context& bvc);
+    bool handle_alternative_block(const block& b, const crypto::hash& id, block_verification_context& bvc, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief builds a list of blocks connecting a block to the main chain
@@ -1379,7 +1383,7 @@ namespace cryptonote
      *
      * @return true on success, false otherwise
      */
-    bool build_alt_chain(const crypto::hash &prev_id, std::list<block_extended_info>& alt_chain, std::vector<uint64_t> &timestamps, block_verification_context& bvc) const;
+    bool build_alt_chain(const crypto::hash &prev_id, std::list<block_extended_info>& alt_chain, std::vector<uint64_t> &timestamps, block_verification_context& bvc, PassingLock lock = nullptr) const;
 
     /**
      * @brief gets the difficulty requirement for a new block on an alternate chain
@@ -1389,7 +1393,7 @@ namespace cryptonote
      *
      * @return the difficulty requirement
      */
-    difficulty_type get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, block_extended_info& bei) const;
+    difficulty_type get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, block_extended_info& bei, PassingLock lock = nullptr) const;
 
     /**
      * @brief sanity checks a miner transaction before validating an entire block
@@ -1421,7 +1425,7 @@ namespace cryptonote
      *
      * @return false if anything is found wrong with the miner transaction, otherwise true
      */
-    bool validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version);
+    bool validate_miner_transaction(const block& b, size_t cumulative_block_weight, uint64_t fee, uint64_t& base_reward, uint64_t already_generated_coins, bool &partial_block_reward, uint8_t version, PassingLock lock = nullptr);
 
     /**
      * @brief reverts the blockchain to its previous state following a failed switch
@@ -1435,7 +1439,7 @@ namespace cryptonote
      *
      * @return false if something goes wrong with reverting (very bad), otherwise true
      */
-    bool rollback_blockchain_switching(std::list<block>& original_chain, uint64_t rollback_height);
+    bool rollback_blockchain_switching(std::list<block>& original_chain, uint64_t rollback_height, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief gets recent block weights for median calculation
@@ -1445,7 +1449,7 @@ namespace cryptonote
      * @param weights return-by-reference the list of weights
      * @param count the number of blocks to get weights for
      */
-    void get_last_n_blocks_weights(std::vector<uint64_t>& weights, size_t count) const;
+    void get_last_n_blocks_weights(std::vector<uint64_t>& weights, size_t count, PassingLock lock = nullptr) const;
 
     /**
      * @brief gets block long term weight median
@@ -1457,7 +1461,7 @@ namespace cryptonote
      *
      * @return the long term median block weight
      */
-    uint64_t get_long_term_block_weight_median(uint64_t start_height, size_t count) const;
+    uint64_t get_long_term_block_weight_median(uint64_t start_height, size_t count, PassingLock lock = nullptr) const;
 
     /**
      * @brief checks if a transaction is unlocked (its outputs spendable)
@@ -1483,7 +1487,7 @@ namespace cryptonote
      *
      * @return false if the block cannot be stored for some reason, otherwise true
      */
-    bool add_block_as_invalid(const block& bl, const crypto::hash& h);
+    bool add_block_as_invalid(const block& bl, const crypto::hash& h, PassingLock lock = nullptr);
 
     /**
      * @brief stores an invalid block in a separate container
@@ -1496,7 +1500,7 @@ namespace cryptonote
      *
      * @return false if the block cannot be stored for some reason, otherwise true
      */
-    bool add_block_as_invalid(const block_extended_info& bei, const crypto::hash& h);
+    bool add_block_as_invalid(const block_extended_info& bei, const crypto::hash& h, PassingLock lock = nullptr);
 
     /**
      * @brief checks a block's timestamp
@@ -1542,7 +1546,7 @@ namespace cryptonote
      *
      * @return true unless start_height is greater than the current blockchain height
      */
-    bool complete_timestamps_vector(uint64_t start_height, std::vector<uint64_t>& timestamps) const;
+    bool complete_timestamps_vector(uint64_t start_height, std::vector<uint64_t>& timestamps, PassingLock lock = nullptr) const;
 
     /**
      * @brief calculate the block weight limit for the next block to be added
@@ -1551,8 +1555,8 @@ namespace cryptonote
      *
      * @return true
      */
-    bool update_next_cumulative_weight_limit(uint64_t *long_term_effective_median_block_weight = NULL);
-    void return_tx_to_pool(std::vector<std::pair<transaction, blobdata>> &txs);
+    bool update_next_cumulative_weight_limit(uint64_t *long_term_effective_median_block_weight = NULL, PassingLock lock = nullptr);
+    void return_tx_to_pool(std::vector<std::pair<transaction, blobdata>> &txs, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief make sure a transaction isn't attempting a double-spend
@@ -1562,7 +1566,7 @@ namespace cryptonote
      *
      * @return false if a double spend was detected, otherwise true
      */
-    bool check_for_double_spend(const transaction& tx, key_images_container& keys_this_block) const;
+    bool check_for_double_spend(const transaction& tx, key_images_container& keys_this_block, PassingLock lock = nullptr) const;
 
     /**
      * @brief validates a transaction input's ring signature
@@ -1585,7 +1589,7 @@ namespace cryptonote
      * 
      * @param get_checkpoints if set, will be called to get checkpoints data
      */
-    void load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints);
+    void load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief invalidates any cached block template
@@ -1607,7 +1611,7 @@ namespace cryptonote
      * @param prev_id hash of new blockchain tip
      * @param already_generated_coins total coins mined by the network so far
      */
-    void send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins);
+    void send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins, PassingLock lock = nullptr, PassingLock txpool_lock = nullptr);
 
     friend struct BlockchainAndPool;
   };

@@ -62,6 +62,8 @@ namespace cryptonote
   //! pair of <transaction fee, transaction hash> for organization
   typedef std::pair<std::pair<double, std::time_t>, crypto::hash> tx_by_fee_and_receive_time_entry;
 
+  using epee::PassingLock;
+
   class txCompare
   {
   public:
@@ -105,7 +107,7 @@ namespace cryptonote
      * @tx_relay how the transaction was received
      * @param tx_weight the transaction's weight
      */
-    bool add_tx(transaction &tx, const crypto::hash &id, const cryptonote::blobdata &blob, size_t tx_weight, tx_verification_context& tvc, relay_method tx_relay, bool relayed, uint8_t version);
+    bool add_tx(transaction &tx, const crypto::hash &id, const cryptonote::blobdata &blob, size_t tx_weight, tx_verification_context& tvc, relay_method tx_relay, bool relayed, uint8_t version, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief add a transaction to the transaction pool
@@ -123,7 +125,7 @@ namespace cryptonote
      *
      * @return true if the transaction passes validations, otherwise false
      */
-    bool add_tx(transaction &tx, tx_verification_context& tvc, relay_method tx_relay, bool relayed, uint8_t version);
+    bool add_tx(transaction &tx, tx_verification_context& tvc, relay_method tx_relay, bool relayed, uint8_t version, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief takes a transaction with the given hash from the pool
@@ -140,7 +142,7 @@ namespace cryptonote
      *
      * @return true unless the transaction cannot be found in the pool
      */
-    bool take_tx(const crypto::hash &id, transaction &tx, cryptonote::blobdata &txblob, size_t& tx_weight, uint64_t& fee, bool &relayed, bool &do_not_relay, bool &double_spend_seen, bool &pruned);
+    bool take_tx(const crypto::hash &id, transaction &tx, cryptonote::blobdata &txblob, size_t& tx_weight, uint64_t& fee, bool &relayed, bool &do_not_relay, bool &double_spend_seen, bool &pruned, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief checks if the pool has a transaction with the given hash
@@ -150,7 +152,7 @@ namespace cryptonote
      *
      * @return true if the transaction is in the pool and meets tx_category requirements
      */
-    bool have_tx(const crypto::hash &id, relay_category tx_category) const;
+    bool have_tx(const crypto::hash &id, relay_category tx_category, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief action to take when notified of a block added to the blockchain
@@ -162,7 +164,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool on_blockchain_inc(uint64_t new_block_height, const crypto::hash& top_block_id);
+    bool on_blockchain_inc(uint64_t new_block_height, const crypto::hash& top_block_id, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief action to take when notified of a block removed from the blockchain
@@ -174,7 +176,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool on_blockchain_dec(uint64_t new_block_height, const crypto::hash& top_block_id);
+    bool on_blockchain_dec(uint64_t new_block_height, const crypto::hash& top_block_id, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief action to take periodically
@@ -192,6 +194,11 @@ namespace cryptonote
      * @brief unlocks the transaction pool
      */
     void unlock() const;
+
+    /**
+     * @brief unlocks the transaction pool
+     */
+    boost::shared_mutex* get_lock();
 
     // load/store operations
 
@@ -229,7 +236,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version);
+    bool fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief get a list of all transactions in the pool
@@ -238,7 +245,7 @@ namespace cryptonote
      * @param include_sensitive return stempool, anonymity-pool, and unrelayed txes
      *
      */
-    void get_transactions(std::vector<transaction>& txs, bool include_sensitive = false) const;
+    void get_transactions(std::vector<transaction>& txs, bool include_sensitive = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get a list of all transaction hashes in the pool
@@ -247,7 +254,7 @@ namespace cryptonote
      * @param include_sensitive return stempool, anonymity-pool, and unrelayed txes
      *
      */
-    void get_transaction_hashes(std::vector<crypto::hash>& txs, bool include_sensitive = false) const;
+    void get_transaction_hashes(std::vector<crypto::hash>& txs, bool include_sensitive = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get (weight, fee, receive time) for all transaction in the pool
@@ -256,7 +263,7 @@ namespace cryptonote
      * @param include_sensitive return stempool, anonymity-pool, and unrelayed txes
      *
      */
-    void get_transaction_backlog(std::vector<tx_backlog_entry>& backlog, bool include_sensitive = false) const;
+    void get_transaction_backlog(std::vector<tx_backlog_entry>& backlog, bool include_sensitive = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get (hash, weight, fee) for transactions in the pool - the minimum required information to create a block template
@@ -269,7 +276,7 @@ namespace cryptonote
      * @param include_sensitive return stempool, anonymity-pool, and unrelayed txes
      *
      */
-    void get_block_template_backlog(std::vector<tx_block_template_backlog_entry>& backlog, bool include_sensitive = false) const;
+    void get_block_template_backlog(std::vector<tx_block_template_backlog_entry>& backlog, bool include_sensitive = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get a summary statistics of all transaction hashes in the pool
@@ -278,7 +285,7 @@ namespace cryptonote
      * @param include_sensitive return stempool, anonymity-pool, and unrelayed txes
      *
      */
-    void get_transaction_stats(struct txpool_stats& stats, bool include_sensitive = false) const;
+    void get_transaction_stats(struct txpool_stats& stats, bool include_sensitive = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get information about all transactions and key images in the pool
@@ -292,7 +299,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_transactions_and_spent_keys_info(std::vector<tx_info>& tx_infos, std::vector<spent_key_image_info>& key_image_infos, bool include_sensitive_data = false) const;
+    bool get_transactions_and_spent_keys_info(std::vector<tx_info>& tx_infos, std::vector<spent_key_image_info>& key_image_infos, bool include_sensitive_data = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get information about all transactions and key images in the pool
@@ -304,7 +311,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_pool_for_rpc(std::vector<cryptonote::rpc::tx_in_pool>& tx_infos, cryptonote::rpc::key_images_with_tx_hashes& key_image_infos) const;
+    bool get_pool_for_rpc(std::vector<cryptonote::rpc::tx_in_pool>& tx_infos, cryptonote::rpc::key_images_with_tx_hashes& key_image_infos, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief check for presence of key images in the pool
@@ -314,7 +321,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool check_for_key_images(const std::vector<crypto::key_image>& key_images, std::vector<bool>& spent) const;
+    bool check_for_key_images(const std::vector<crypto::key_image>& key_images, std::vector<bool>& spent, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get a specific transaction from the pool
@@ -325,7 +332,7 @@ namespace cryptonote
      *
      * @return true if the transaction is found, otherwise false
      */
-    bool get_transaction(const crypto::hash& h, cryptonote::blobdata& txblob, relay_category tx_category) const;
+    bool get_transaction(const crypto::hash& h, cryptonote::blobdata& txblob, relay_category tx_category, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get a list of all relayable transactions and their hashes
@@ -343,7 +350,7 @@ namespace cryptonote
      *
      * @return True if DB was checked, false if DB checks skipped.
      */
-    bool get_relayable_transactions(std::vector<std::tuple<crypto::hash, cryptonote::blobdata, relay_method>>& txs);
+    bool get_relayable_transactions(std::vector<std::tuple<crypto::hash, cryptonote::blobdata, relay_method>>& txs, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief tell the pool that certain transactions were just relayed
@@ -353,14 +360,14 @@ namespace cryptonote
      * @param just_broadcasted true if a tx was just broadcasted
      *
      */
-    void set_relayed(epee::span<const crypto::hash> hashes, relay_method tx_relay, std::vector<bool> &just_broadcasted);
+    void set_relayed(epee::span<const crypto::hash> hashes, relay_method tx_relay, std::vector<bool> &just_broadcasted, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief get the total number of transactions in the pool
      *
      * @return the number of transactions in the pool
      */
-    size_t get_transactions_count(bool include_sensitive = false) const;
+    size_t get_transactions_count(bool include_sensitive = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get a string containing human-readable pool information
@@ -369,7 +376,7 @@ namespace cryptonote
      *
      * @return the string
      */
-    std::string print_pool(bool short_format) const;
+    std::string print_pool(bool short_format, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief remove transactions from the pool which are no longer valid
@@ -382,7 +389,7 @@ namespace cryptonote
      *
      * @return the number of transactions removed
      */
-    size_t validate(uint8_t version);
+    size_t validate(uint8_t version, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
      /**
       * @brief return the cookie
@@ -396,14 +403,14 @@ namespace cryptonote
      *
      * @return the cumulative txpool weight in bytes
      */
-    size_t get_txpool_weight() const;
+    size_t get_txpool_weight(PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief set the max cumulative txpool weight in bytes
      *
      * @param bytes the max cumulative txpool weight in bytes
      */
-    void set_txpool_max_weight(size_t bytes);
+    void set_txpool_max_weight(size_t bytes, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief reduce the cumulative txpool weight by the weight provided
@@ -460,24 +467,24 @@ namespace cryptonote
     /**
      * @brief get infornation about a single transaction
      */
-    bool get_transaction_info(const crypto::hash &txid, tx_details &td, bool include_sensitive_data, bool include_blob = false) const;
+    bool get_transaction_info(const crypto::hash &txid, tx_details &td, bool include_sensitive_data, bool include_blob = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get information about multiple transactions
      */
-    bool get_transactions_info(const std::vector<crypto::hash>& txids, std::vector<std::pair<crypto::hash, tx_details>>& txs, bool include_sensitive_data = false) const;
+    bool get_transactions_info(const std::vector<crypto::hash>& txids, std::vector<std::pair<crypto::hash, tx_details>>& txs, bool include_sensitive_data = false, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get transactions not in the passed set
      */
-    bool get_complement(const std::vector<crypto::hash> &hashes, std::vector<cryptonote::blobdata> &txes) const;
+    bool get_complement(const std::vector<crypto::hash> &hashes, std::vector<cryptonote::blobdata> &txes, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief get info necessary for update of pool-related info in a wallet, preferably incremental
      *
      * @return true on success, false on error
      */
-    bool get_pool_info(time_t start_time, bool include_sensitive, size_t max_tx_count, std::vector<std::pair<crypto::hash, tx_details>>& added_txs, std::vector<crypto::hash>& remaining_added_txids, std::vector<crypto::hash>& removed_txs, bool& incremental) const;
+    bool get_pool_info(time_t start_time, bool include_sensitive, size_t max_tx_count, std::vector<std::pair<crypto::hash, tx_details>>& added_txs, std::vector<crypto::hash>& remaining_added_txids, std::vector<crypto::hash>& removed_txs, bool& incremental, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
   private:
 
@@ -504,7 +511,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool remove_stuck_transactions();
+    bool remove_stuck_transactions(PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief check if a transaction in the pool has a given spent key image
@@ -514,7 +521,7 @@ namespace cryptonote
      *
      * @return true if the spent key image is present, otherwise false
      */
-    bool have_tx_keyimg_as_spent(const crypto::key_image& key_im, const crypto::hash& txid) const;
+    bool have_tx_keyimg_as_spent(const crypto::key_image& key_im, const crypto::hash& txid, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief check if any spent key image in a transaction is in the pool
@@ -529,7 +536,7 @@ namespace cryptonote
      *
      * @return true if any spent key images are present in the pool, otherwise false
      */
-    bool have_tx_keyimges_as_spent(const transaction& tx, const crypto::hash& txid) const;
+    bool have_tx_keyimges_as_spent(const transaction& tx, const crypto::hash& txid, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr) const;
 
     /**
      * @brief forget a transaction's spent key images
@@ -543,7 +550,7 @@ namespace cryptonote
      *
      * @return false if any key images to be removed cannot be found, otherwise true
      */
-    bool remove_transaction_keyimages(const transaction_prefix& tx, const crypto::hash &txid);
+    bool remove_transaction_keyimages(const transaction_prefix& tx, const crypto::hash &txid, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief check if any of a transaction's spent key images are present in a given set
@@ -575,20 +582,20 @@ namespace cryptonote
      *
      * @return true if the transaction is good to go, otherwise false
      */
-    bool is_transaction_ready_to_go(txpool_tx_meta_t& txd, const crypto::hash &txid, const cryptonote::blobdata_ref &txblob, transaction&tx) const;
-    bool is_transaction_ready_to_go(txpool_tx_meta_t& txd, const crypto::hash &txid, const cryptonote::blobdata &txblob, transaction&tx) const;
+    bool is_transaction_ready_to_go(txpool_tx_meta_t& txd, const crypto::hash &txid, const cryptonote::blobdata_ref &txblob, transaction&tx, PassingLock blockchain_lock = nullptr) const;
+    bool is_transaction_ready_to_go(txpool_tx_meta_t& txd, const crypto::hash &txid, const cryptonote::blobdata &txblob, transaction&tx, PassingLock blockchain_lock = nullptr) const;
 
     /**
      * @brief mark all transactions double spending the one passed
      */
-    void mark_double_spend(const transaction &tx);
+    void mark_double_spend(const transaction &tx, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     /**
      * @brief prune lowest fee/byte txes till we're not above bytes
      *
      * if bytes is 0, use m_txpool_max_weight
      */
-    void prune(size_t bytes = 0);
+    void prune(size_t bytes = 0, PassingLock blockchain_lock = nullptr, PassingLock txpool_lock = nullptr);
 
     void add_tx_to_transient_lists(const crypto::hash& txid, double fee, time_t receive_time);
     void remove_tx_from_transient_lists(const cryptonote::sorted_tx_container::iterator& sorted_it, const crypto::hash& txid, bool sensitive);
@@ -608,7 +615,7 @@ namespace cryptonote
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
 public:
 #endif
-    mutable epee::critical_section m_transactions_lock;  //!< lock for the pool
+    mutable boost::shared_mutex m_transactions_lock;  //!< lock for the pool
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
 private:
 #endif
@@ -656,7 +663,7 @@ private:
     sorted_tx_container::iterator find_tx_in_sorted_container(const crypto::hash& id) const;
 
     //! cache/call Blockchain::check_tx_inputs results
-    bool check_tx_inputs(const std::function<cryptonote::transaction&(void)> &get_tx, const crypto::hash &txid, uint64_t &max_used_block_height, crypto::hash &max_used_block_id, tx_verification_context &tvc, bool kept_by_block = false) const;
+    bool check_tx_inputs(const std::function<cryptonote::transaction&(void)> &get_tx, const crypto::hash &txid, uint64_t &max_used_block_height, crypto::hash &max_used_block_id, tx_verification_context &tvc, bool kept_by_block = false, PassingLock blockchain_lock = nullptr) const;
 
     //! transactions which are unlikely to be included in blocks
     /*! These transactions are kept in RAM in case they *are* included
