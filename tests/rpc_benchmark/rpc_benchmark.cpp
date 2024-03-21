@@ -104,7 +104,8 @@ uint32_t benchmark_iteration;
 
 #define MAX_NUMBER_OF_WALLETS (1024 << 2)
 #define MAX_MINE_TIME (1024 << 2)
-#define MAX_BENCHMARK_ITERATION_TIME 1024
+#define MAX_BENCHMARK_ITERATION_TIME (1024 << 8)
+#define MAX_NUMBER_OF_BLOCKS 50000
 
 namespace WalletRPC
 {
@@ -279,7 +280,7 @@ void create_offline_daemon(
       daemon.exec_path,
       Daemon::NO_SYNC,
       Daemon::OFFLINE,
-      Daemon::TESTNET,
+      // Daemon::TESTNET,
       Daemon::NO_IGD,
       Daemon::HIDE_MY_PORT,
       Daemon::DISABLE_RPC_BAN,      
@@ -292,7 +293,7 @@ void create_offline_daemon(
       (boost::format(Daemon::MAX_CONCURRENCY_CONTAINER) % std::to_string(daemon.max_concurrency)).str(),
       (boost::format(Daemon::LIMIT_RATE_UP_CONTAINER) % std::to_string(std::numeric_limits<uint32_t>::max())).str(),
       (boost::format(Daemon::LIMIT_RATE_DOWN_CONTAINER) % std::to_string(std::numeric_limits<uint32_t>::max())).str(),      
-      (boost::format(Daemon::DATA_DIR_CONTAINER) % daemon.data_dir).str(),
+      // (boost::format(Daemon::DATA_DIR_CONTAINER) % daemon.data_dir).str(),
       (boost::format(Daemon::LOG_LEVEL_CONTAINER) % std::to_string(daemon.log_level)).str(),
       process::std_out > pipe_stream);
 
@@ -697,13 +698,25 @@ void mine()
     }
 }
 
+struct RandomBlockNumberGenerator
+{
+public:
+  RandomBlockNumberGenerator(uint64_t max_value) : max_value(max_value) {};
+  using result_type = uint64_t;
+  result_type min() { return 1; }
+  result_type max() { return max_value; }
+  result_type operator()() { return rand() % max_value; }
+  result_type max_value;
+};  
+
 std::chrono::milliseconds do_benchmark(filesystem::path daemon_exec_path)
 {
   Daemon::daemon daemon;
   daemon.ip_address = daemon.p2p_ip = Daemon::RPC_DEFAULT_IP;
   daemon.p2p_port = Daemon::P2P_BASE_PORT;
   daemon.rpc_port = Daemon::RPC_BASE_PORT;
-  daemon.data_dir = Daemon::Default_daemon_location(0);
+  // daemon.data_dir = Daemon::Default_daemon_location(0);
+  // daemon.data_dir = Daemon::Default_daemon_location(0);
   daemon.exec_path = daemon_exec_path;
   daemon.log_level = 0;
   boost::condition_variable daemon_terminator;
@@ -726,7 +739,7 @@ std::chrono::milliseconds do_benchmark(filesystem::path daemon_exec_path)
         Daemon::RPC_DEFAULT_IP,
         std::to_string(Daemon::RPC_BASE_PORT),
         boost::none,
-        epee::net_utils::ssl_support_t::e_ssl_support_disabled);
+        epee::net_utils::ssl_support_t::e_ssl_support_disabled);        
 
     // Get Height
     http_simple_client.connect(std::chrono::milliseconds(3000));
@@ -734,27 +747,28 @@ std::chrono::milliseconds do_benchmark(filesystem::path daemon_exec_path)
     cryptonote::COMMAND_RPC_GET_HEIGHT::response response;
     bool result = epee::net_utils::invoke_http_json("/get_height", request, response, http_simple_client, rpc_timeout);
     height = response.height;
-    LTRACE("RPC get_height return : " << result);
-    LTRACE("RPC height : " << height);
-    LTRACE("RPC status : " << response.status);
-    LTRACE("RPC top_hash : " << response.hash);
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    uint64_t max_number_of_blocks = MAX_NUMBER_OF_BLOCKS > height ? (height - 1) : MAX_NUMBER_OF_BLOCKS;
+    RandomBlockNumberGenerator randomBlockNumberGenerator(MAX_NUMBER_OF_BLOCKS);
+    // LTRACE("RPC get_height return : " << result);
+    // LTRACE("RPC height : " << height);
+    // LTRACE("RPC status : " << response.status);
+    // LTRACE("RPC top_hash : " << response.hash);
 
     for (int iter = 0; iter < max_iter; ++iter)
       {
         cryptonote::COMMAND_RPC_GET_BLOCKS_BY_HEIGHT::request request;
         cryptonote::COMMAND_RPC_GET_BLOCKS_BY_HEIGHT::response response;
-        request.heights.resize(height - 1);
-        std::iota(request.heights.begin(), request.heights.end(), 1);
+        request.heights.resize(max_number_of_blocks);
+        std::generate(request.heights.begin(), request.heights.end(), randomBlockNumberGenerator);
         bool r = epee::net_utils::invoke_http_bin(
             "/get_blocks_by_height.bin",
             request,
             response,
             http_simple_client,
             rpc_timeout);
-        LTRACE("RPC getblocks_by_height return : " << r << " by thread " << index);
-        LTRACE("response.blocks.size() : " << response.blocks.size() << " by thread " << index);
-        LTRACE("response.status : " << response.status << " by thread " << index);
+        // LTRACE("RPC getblocks_by_height return : " << r << " by thread " << index);
+        // LTRACE("response.blocks.size() : " << response.blocks.size() << " by thread " << index);
+        // LTRACE("response.status : " << response.status << " by thread " << index);
       }
       http_simple_client.disconnect();
   };
@@ -767,18 +781,19 @@ std::chrono::milliseconds do_benchmark(filesystem::path daemon_exec_path)
   auto start = std::chrono::steady_clock::now();
   LINFO("Run benchmarks...");
 
-  std::vector<std::thread> wallet_creator_jobs;
-  wallet_creator_jobs.clear();
+  std::vector<std::thread> benchmark_jobs;
+  uint32_t number_benchmark_jobs = (number_of_wallets * 3);
+  benchmark_jobs.clear();
   for (int index = 0; index < number_of_wallets; ++index)
     {
-      wallet_creator_jobs.push_back(
+      benchmark_jobs.push_back(
           std::thread(rpc_call_to_daemon, benchmark_iteration, index));
     }
 
   for (int index = 0; index < number_of_wallets; ++index)
     {
-      if (wallet_creator_jobs.at(index).joinable())
-        wallet_creator_jobs.at(index).join();
+      if (benchmark_jobs.at(index).joinable())
+        benchmark_jobs.at(index).join();
     }
 
   daemon_terminator.notify_all();
@@ -801,17 +816,17 @@ int main(int argc, char** argv)
 {
   parse_and_validate(argc, argv);
 
-  create_n_wallets();
+  // create_n_wallets();
 
-  std::for_each(
-      begin(WalletRPC::address_wallet),
-      end(WalletRPC::address_wallet),
-      [&](const std::pair<int, std::string>& item) {
-        LTRACE("Wallet " << item.first << " : " << item.second);
-      });
+  // std::for_each(
+  //     begin(WalletRPC::address_wallet),
+  //     end(WalletRPC::address_wallet),
+  //     [&](const std::pair<int, std::string>& item) {
+  //       LTRACE("Wallet " << item.first << " : " << item.second);
+  //     });
 
-  LINFO( "Start mining...");
-  mine();
+  // LINFO( "Start mining...");
+  // mine();
 
   // do benchmark with master
   LINFO( "Start benchmarking with master...");
