@@ -1024,6 +1024,8 @@ namespace cryptonote
 
     std::vector<blobdata> stem_txs{};
     std::vector<blobdata> fluff_txs{};
+    std::set<crypto::hash> fluff_txs_hash{};
+
     if (arg.dandelionpp_fluff)
     {
       tx_relay = relay_method::fluff;
@@ -1050,8 +1052,16 @@ namespace cryptonote
           break;
         case relay_method::block:
         case relay_method::fluff:
-          fluff_txs.push_back(std::move(tx));
+        {
+          cryptonote::transaction transaction;
+          cryptonote::parse_and_validate_tx_from_blob(tx, transaction);
+          if(fluff_txs_hash.find(transaction.hash) == fluff_txs_hash.end())
+          {
+            fluff_txs_hash.emplace(transaction.hash);
+            fluff_txs.push_back(std::move(tx));            
+          }
           break;
+        }
         default:
         case relay_method::forward: // not supposed to happen here
         case relay_method::none:

@@ -42,6 +42,7 @@
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 #include "crypto/duration.h"
+#include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_basic/connection_context.h"
 #include "cryptonote_core/i_core_events.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
@@ -290,6 +291,25 @@ namespace levin
       struct context_t {
         std::vector<cryptonote::blobdata> fluff_txs;
         std::chrono::steady_clock::time_point flush_time;
+        std::set<crypto::hash> fluff_txs_hash;
+
+        // this is a blockbox method that will take care of 
+        // all the logic related to adding transaction to the fluff queue.
+        void add_transaction(epee::span<const blobdata> txs) {
+          std::for_each(txs.begin(), txs.end(), [&](const blobdata tx_blob){
+            cryptonote::transaction tx;
+            cryptonote::parse_and_validate_tx_from_blob(tx_blob, tx);
+
+            // only add the transaction to fluff queue
+            // if we don't have it already in the fluff queue.
+            if(fluff_txs_hash.find(tx.hash) == fluff_txs_hash.end()) {
+              fluff_txs_hash.emplace(tx.hash);
+              fluff_txs.push_back(tx_blob);
+            }
+
+          });          
+        }
+
         bool m_is_income;
       };
       boost::unordered_map<boost::uuids::uuid, context_t> contexts;
@@ -380,6 +400,7 @@ namespace levin
               context.flush_time = std::chrono::steady_clock::time_point::max();
               connections.emplace_back(std::move(context.fluff_txs), id);
               context.fluff_txs.clear();
+              context.fluff_txs_hash.clear();
             }
             else // not flushing yet
               next_flush = std::min(next_flush, context.flush_time);
@@ -445,8 +466,7 @@ namespace levin
               context.flush_time = now + (context.m_is_income ? in_duration() : out_duration());
 
             next_flush = std::min(next_flush, context.flush_time);
-            context.fluff_txs.reserve(context.fluff_txs.size() + txs.size());
-            context.fluff_txs.insert(context.fluff_txs.end(), txs.begin(), txs.end());
+            context.add_transaction(txs);
           }
         }
 
@@ -771,6 +791,7 @@ namespace levin
       zone->contexts[id] = {
         .fluff_txs = {},
         .flush_time = std::chrono::steady_clock::time_point::max(),
+        .fluff_txs_hash = {},
         .m_is_income = is_income,
       };
     });
