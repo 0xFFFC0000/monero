@@ -288,9 +288,14 @@ namespace levin
       boost::asio::steady_timer flush_txs;
       boost::asio::io_service::strand strand;
       struct context_t {
-        std::vector<cryptonote::blobdata> fluff_txs;
+        std::set<cryptonote::blobdata> fluff_txs;
         std::chrono::steady_clock::time_point flush_time;
         bool m_is_income;
+
+        std::vector<cryptonote::blobdata> get_fluff_txs_vector() {
+          std::vector fluff_vector( fluff_txs.begin(), fluff_txs.end() );
+          return fluff_vector;
+        }
       };
       boost::unordered_map<boost::uuids::uuid, context_t> contexts;
       net::dandelionpp::connection_map map;//!< Tracks outgoing uuid's for noise channels or Dandelion++ stems
@@ -378,7 +383,7 @@ namespace levin
             if (context.flush_time <= now || timer_error) // flush on canceled timer
             {
               context.flush_time = std::chrono::steady_clock::time_point::max();
-              connections.emplace_back(std::move(context.fluff_txs), id);
+              connections.emplace_back(context.get_fluff_txs_vector(), id);
               context.fluff_txs.clear();
             }
             else // not flushing yet
@@ -445,8 +450,8 @@ namespace levin
               context.flush_time = now + (context.m_is_income ? in_duration() : out_duration());
 
             next_flush = std::min(next_flush, context.flush_time);
-            context.fluff_txs.reserve(context.fluff_txs.size() + txs.size());
-            context.fluff_txs.insert(context.fluff_txs.end(), txs.begin(), txs.end());
+            std::for_each(txs.cbegin(), txs.cend(),
+              [&](cryptonote::blobdata blob) { context.fluff_txs.insert(blob); });            
           }
         }
 
