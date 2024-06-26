@@ -95,8 +95,8 @@
 
 #define BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT          10000  //by default, blocks ids count in synchronizing
 #define BLOCKS_IDS_SYNCHRONIZING_MAX_COUNT              25000  //max blocks ids count in synchronizing
-#define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT_PRE_V4       100    //by default, blocks count in blocks downloading
-#define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT              20     //by default, blocks count in blocks downloading
+#define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT_PRE_V4       20    //by default, blocks count in blocks downloading
+#define BLOCKS_SYNCHRONIZING_DEFAULT_COUNT              1     //by default, blocks count in blocks downloading
 #define BLOCKS_SYNCHRONIZING_MAX_COUNT                  2048   //must be a power of 2, greater than 128, equal to SEEDHASH_EPOCH_BLOCKS
 
 #define CRYPTONOTE_MEMPOOL_TX_LIVETIME                    (86400*3) //seconds, three days
@@ -148,8 +148,8 @@
 #define P2P_DEFAULT_LIMIT_RATE_UP                       2048       // kB/s
 #define P2P_DEFAULT_LIMIT_RATE_DOWN                     8192       // kB/s
 
-#define P2P_FAILED_ADDR_FORGET_SECONDS                  (60*60)     //1 hour
-#define P2P_IP_BLOCKTIME                                (60*60*24)  //24 hour
+#define P2P_FAILED_ADDR_FORGET_SECONDS                  (60)     //1 minute
+#define P2P_IP_BLOCKTIME                                (60*2)  //2 minutes
 #define P2P_IP_FAILS_BEFORE_BLOCK                       10
 #define P2P_IDLE_CONNECTION_KILL_INTERVAL               (5*60) //5 minutes
 
