@@ -30,7 +30,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <list>
+#include "crypto/hash.h"
 #include "serialization/keyvalue_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/blobdatatype.h"
@@ -315,6 +317,21 @@ namespace cryptonote
     };
     typedef epee::misc_utils::struct_init<request_t> request;
   };
+
+  struct TORTURE_ENTRY
+  {
+    struct request_t
+    {
+      std::vector<std::string> torture_field;
+      std::vector<tx_blob_entry> torture_txs;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(torture_field)
+        KV_SERIALIZE(torture_txs)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+  };  
   
   /************************************************************************/
   /*                                                                      */

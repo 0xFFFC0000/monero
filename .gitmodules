@@ -14,3 +14,9 @@
 	path = external/supercop
 	url = https://github.com/monero-project/supercop
 	branch = monero
+[submodule "tests/benchmark_serialization/benchmark"]
+	path = tests/benchmark_serialization/benchmark
+	url = https://github.com/google/benchmark.git
+[submodule "tests/benchmark_serialization/gperftools"]
+	path = tests/benchmark_serialization/gperftools
+	url = https://github.com/gperftools/gperftools.git
