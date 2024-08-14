@@ -54,3 +54,50 @@ TEST(protocol_pack, protocol_pack_command)
     ASSERT_TRUE(r.total_height == 3);
   }
 }
+
+std::string gen_random_string2(const int len) {
+    static const char alphanum[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+    std::string tmp_s;
+    tmp_s.reserve(len);
+
+    for (int i = 0; i < len; ++i) {
+        tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
+    }
+    
+    return tmp_s;
+}
+
+
+namespace
+{
+  static const constexpr epee::serialization::portable_storage::limits_t default_levin_limits = {
+    8192, // objects
+    16384, // fields
+    16384, // strings
+  };
+}
+
+TEST(protocol_pack, torture_number)
+{
+
+  std::vector<std::string> vinput;
+
+  for(size_t j = 0; j < (16386); j++) {
+    vinput.push_back(gen_random_string2(4));
+  }
+
+  epee::byte_slice buff;
+  cryptonote::TORTURE_ENTRY::request r;
+  r.torture_field = vinput;
+  bool res = epee::serialization::store_t_to_binary(r, buff);
+  ASSERT_TRUE(res);
+
+  cryptonote::TORTURE_ENTRY::request r2;
+  res = epee::serialization::load_t_from_binary(r2, epee::to_span(buff), &default_levin_limits);
+  ASSERT_TRUE(res);
+  EXPECT_EQ(r.torture_field, r2.torture_field);
+
+}
