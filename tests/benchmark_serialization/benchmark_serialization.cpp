@@ -12,6 +12,8 @@
 #include "benchmark/benchmark.h"  // link benchmark
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "include_base_utils.h"
+#include "p2p/p2p_protocol_defs.h"
+#include "span.h"
 #include "storages/portable_storage_template_helper.h"
 
 benchmark::IterationCount g_num_new = 0;
@@ -31,17 +33,16 @@ auto new_hook = [](const void*, size_t size) {
   g_min_size_new = -1;                                     \
   MallocHook::AddNewHook(new_hook);
 
-#define AFTER_TEST                                                      \
-  MallocHook::RemoveNewHook(new_hook);                                  \
-  auto iter = state.iterations();                                       \
-  state.counters["#new"] = (g_num_new - num_new) / iter;                \
-  state.counters["sum_new_allocated"] = (g_sum_size_new - sum_size_new) / iter; \
-  state.counters["avg_new_allocated"] =                                         \
-      (g_sum_size_new - sum_size_new) / (g_num_new - num_new);          \
-  state.counters["max_new_allocated"] = g_max_size_new;                         \
-  if (((benchmark::IterationCount) - 1) != g_min_size_new)              \
-    {                                                                   \
-      state.counters["min_new_allocated"] = g_min_size_new;                     \
+#define AFTER_TEST                                          \
+  MallocHook::RemoveNewHook(new_hook);                      \
+  auto iter = state.iterations();                           \
+  state.counters["#new"] = (g_num_new - num_new) / iter;    \
+  state.counters["sum_new_allocated"] =                     \
+      (g_sum_size_new - sum_size_new) / iter;               \
+  state.counters["max_new_allocated"] = g_max_size_new;     \
+  if (((benchmark::IterationCount) - 1) != g_min_size_new)  \
+    {                                                       \
+      state.counters["min_new_allocated"] = g_min_size_new; \
     }
 
 std::string gen_random_string2(const int len)
@@ -60,6 +61,87 @@ std::string gen_random_string2(const int len)
 
   return tmp_s;
 }
+
+static void dos_1(benchmark::State& state)
+{
+  BEFORE_TEST
+  for (auto _ : state)
+    {
+      state.PauseTiming();
+      size_t max_bytes = state.range(0);
+      epee::serialization::portable_storage::limits_t default_levin_limits = {
+          131072,  // objects
+          131072 * 2,  // fields
+          131072,  // strings
+      };      
+
+      std::vector<uint8_t> sample{
+          0x01,
+          0x11,
+          0x01,
+          0x01,
+          0x01,
+          0x01,
+          0x02,
+          0x01,
+          0x01,
+          0x04,
+          0x01,
+          0x61,
+          0x8c,
+          0x32,
+          0xd9,
+          0xf5,
+          0x05};
+      if (sample.size() < (100 * 1000 * 1000))
+        {
+          std::size_t offset = sample.size();
+          sample.resize(100 * 1000 * 1000);
+          for (const std::vector<uint8_t> e{0x04, 0x00, 0x8d, 0x00};
+               offset + e.size() < sample.size();
+               offset += e.size())
+            {
+              std::memcpy(sample.data() + offset, e.data(), e.size());
+            }
+        }
+      state.counters["Data"] = max_bytes;
+      cryptonote::DOS_ENTRY::request req;
+      state.ResumeTiming();
+      if (epee::serialization::load_t_from_binary(
+              req, epee::to_span(sample), &default_levin_limits))
+        {
+          state.SkipWithError("Error to load_t_from_binary at dos_1");
+        }
+    }
+  AFTER_TEST
+}
+
+static void dos_2(benchmark::State& state)
+{
+  BEFORE_TEST
+  for (auto _ : state)
+    {
+      state.PauseTiming();
+      size_t max_bytes = state.range(0);
+      epee::serialization::portable_storage::limits_t default_levin_limits = {
+          131072,  // objects
+          131072 * 2,  // fields
+          131072,  // strings
+      };      
+      std::vector<uint8_t> sample{0x01, 0x11, 0x01, 0x01, 0x01, 0x01, 0x02, 0x01, 0x01, 0x04, 0x01, 0x61, 0x8c, 0xbe, 0x83, 0xd7, 0x17};
+      sample.resize(100 * 1000 * 1000, {});
+      state.counters["Data"] = max_bytes;
+      cryptonote::DOS_ENTRY::request req;
+      state.ResumeTiming();
+      if (epee::serialization::load_t_from_binary(
+              req, epee::to_span(sample), &default_levin_limits))
+        {
+          state.SkipWithError("Error to load_t_from_binary at dos_2");
+        }
+    }
+  AFTER_TEST
+}
+
 
 static void tiny_4_string_test(benchmark::State& state)
 {
@@ -598,66 +680,78 @@ static void big_262144_object_test(benchmark::State& state)
 
 #define START_SIZE 32
 
-BENCHMARK(tiny_4_object_test)
+BENCHMARK(dos_1)
     ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 22)
+    ->Range(START_SIZE, 8 << 24)
     ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(small_128_object_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 17)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(medium_1024_object_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 14)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(large_16384_object_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 10)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(big_262144_object_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 7)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
+    ->MinWarmUpTime(1)->Iterations(5);
 
-BENCHMARK(tiny_4_string_test)
+BENCHMARK(dos_2)
     ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 22)
+    ->Range(START_SIZE, 8 << 24)
     ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(small_128_string_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 17)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(medium_1024_string_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 14)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(large_16384_string_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 10)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
-BENCHMARK(big_262144_string_test)
-    ->RangeMultiplier(2)
-    ->Range(START_SIZE, 8 << 6)
-    ->Unit(benchmark::kMillisecond)
-    ->MinWarmUpTime(
-        1);  // ->Complexity();; // complexity not working right now.
+    ->MinWarmUpTime(1)->Iterations(5);
+
+// BENCHMARK(tiny_4_object_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 22)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(small_128_object_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 17)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(medium_1024_object_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 14)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(large_16384_object_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 10)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(big_262144_object_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 7)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+
+// BENCHMARK(tiny_4_string_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 22)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(small_128_string_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 17)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(medium_1024_string_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 14)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(large_16384_string_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 10)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
+// BENCHMARK(big_262144_string_test)
+//     ->RangeMultiplier(2)
+//     ->Range(START_SIZE, 8 << 6)
+//     ->Unit(benchmark::kMillisecond)
+//     ->MinWarmUpTime(
+//         1);  // ->Complexity();; // complexity not working right now.
 
 BENCHMARK_MAIN();

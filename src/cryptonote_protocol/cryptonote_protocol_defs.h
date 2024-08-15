@@ -332,6 +332,20 @@ namespace cryptonote
     };
     typedef epee::misc_utils::struct_init<request_t> request;
   };  
+
+  struct DOS_ENTRY
+  {
+    struct request_t
+    {
+      std::vector<uint8_t> dos_entry;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(dos_entry)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+  };
+
   
   /************************************************************************/
   /*                                                                      */
