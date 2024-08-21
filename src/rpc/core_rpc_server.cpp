@@ -657,7 +657,7 @@ namespace cryptonote
       const bool restricted = m_restricted && ctx;
       const bool request_has_rpc_origin = ctx != NULL;
       const bool allow_sensitive = !request_has_rpc_origin || !restricted;
-      const size_t max_tx_count = restricted ? RESTRICTED_TRANSACTIONS_COUNT : std::numeric_limits<size_t>::max();
+      const size_t max_tx_count = restricted ? RESTRICTED_TRANSACTIONS_COUNT : 1000;
 
       bool incremental;
       std::vector<std::pair<crypto::hash, tx_memory_pool::tx_details>> added_pool_txs;
