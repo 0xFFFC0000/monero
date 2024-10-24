@@ -33,6 +33,10 @@ message(STATUS "CMake version ${CMAKE_VERSION}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_compile_definitions(ELPP_FEATURE_CRASH_LOG=1)
+add_compile_definitions(ELPP_STACKTRACE_ON_CRASH=1)
+add_compile_definitions(ELPP_STACKTRACE=1)
+
 list(INSERT CMAKE_MODULE_PATH 0
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CheckCCompilerFlag)
@@ -1014,7 +1018,7 @@ else()
     endif()
   endif()
 
-  set(DEBUG_FLAGS "-g3")
+  set(DEBUG_FLAGS "-O0 -g3 -ggdb3 -rdynamic")
 
   # At least some CLANGs default to not enough for monero
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=900")
