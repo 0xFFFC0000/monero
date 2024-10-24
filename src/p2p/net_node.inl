@@ -2325,6 +2325,12 @@ namespace nodetool
   bool node_server<t_payload_net_handler>::drop_connection(const epee::net_utils::connection_context_base& context)
   {
     m_network_zones.at(context.m_remote_address.get_zone()).m_net_server.get_config_object().close(context.m_connection_id);
+    MGINFO_RED("============================");    
+    MGINFO_RED("============================");    
+    MGINFO_RED("Stacktrace " << context.m_remote_address.str() <<  " : >>>>>>> \n" << el::base::debug::StackTrace());
+    MGINFO_RED("============================");    
+    MGINFO_RED("============================");
+    MGINFO_RED("End.");    
     return true;
   }
   //-----------------------------------------------------------------------------------

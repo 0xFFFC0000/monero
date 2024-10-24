@@ -1646,7 +1646,7 @@ namespace cryptonote
 
     if (!check_incoming_block_size(block_blob))
     {
-      bvc.m_verifivation_failed = true;
+      MGINFO_RED("_IMPORTANT_LOG_> " << __FILE__ << " : " << __LINE__);bvc.m_verifivation_failed = true;
       return false;
     }
 
@@ -1660,7 +1660,7 @@ namespace cryptonote
       if(!parse_and_validate_block_from_blob(block_blob, lb, block_hash))
       {
         LOG_PRINT_L1("Failed to parse and validate new block");
-        bvc.m_verifivation_failed = true;
+        MGINFO_RED("_IMPORTANT_LOG_> " << __FILE__ << " : " << __LINE__);bvc.m_verifivation_failed = true;
         return false;
       }
       b = &lb;
