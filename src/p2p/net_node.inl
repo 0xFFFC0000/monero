@@ -299,8 +299,15 @@ namespace nodetool
       conns.clear();
     }
 
-    if (added)
+    if (added) {
       MCLOG_CYAN(el::Level::Info, "global", "Host " << host_str << " blocked.");
+      MGINFO_RED("============================");
+      MGINFO_RED("============================");
+      MGINFO_RED("_BLOCKED_Stacktrace " << host_str <<  " : >>>>>>> \n" << el::base::debug::StackTrace());
+      MGINFO_RED("============================");
+      MGINFO_RED("============================");
+      MGINFO_RED("End.");    
+    }
     else
       MINFO("Host " << host_str << " block time updated.");
     return true;
@@ -362,8 +369,15 @@ namespace nodetool
       conns.clear();
     }
 
-    if (added)
+    if (added) {
       MCLOG_CYAN(el::Level::Info, "global", "Subnet " << subnet.host_str() << " blocked.");
+      MGINFO_RED("============================");
+      MGINFO_RED("============================");
+      MGINFO_RED("_BLOCKED_Stacktrace " << subnet.host_str() <<  " : >>>>>>> \n" << el::base::debug::StackTrace());
+      MGINFO_RED("============================");
+      MGINFO_RED("============================");
+      MGINFO_RED("End.");
+    }
     else
       MINFO("Subnet " << subnet.host_str() << " blocked.");
     return true;
