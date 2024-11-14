@@ -3007,10 +3007,16 @@ void wallet2::process_new_blockchain_entry(const cryptonote::block& b, const cry
 //----------------------------------------------------------------------------------------------------
 void wallet2::get_short_chain_history(std::list<crypto::hash>& ids, uint64_t granularity) const
 {
+  MLOG_YELLOW(el::Level::Error, "========================================================= ");
+  MLOG_YELLOW(el::Level::Error, "granularity : " << granularity);
+  MLOG_YELLOW(el::Level::Error, "m_blockchain.size() : " << m_blockchain.size());
+  MLOG_YELLOW(el::Level::Error, "m_blockchain.offset() : " << m_blockchain.offset());
   size_t i = 0;
   size_t current_multiplier = 1;
   size_t blockchain_size = std::max((size_t)(m_blockchain.size() / granularity * granularity), m_blockchain.offset());
+  MLOG_YELLOW(el::Level::Error, "blockchain_size : " << blockchain_size);
   size_t sz = blockchain_size - m_blockchain.offset();
+  MLOG_YELLOW(el::Level::Error, "sz : " << sz);
   if(!sz)
   {
     ids.push_back(m_blockchain.genesis());
@@ -3036,6 +3042,8 @@ void wallet2::get_short_chain_history(std::list<crypto::hash>& ids, uint64_t gra
     ids.push_back(m_blockchain[m_blockchain.offset()]);
   if(m_blockchain.offset())
     ids.push_back(m_blockchain.genesis());
+  MLOG_YELLOW(el::Level::Error, "current_back_offset: " << current_back_offset <<  ", adding : " << m_blockchain.offset() + sz-current_back_offset);
+  MLOG_YELLOW(el::Level::Error, "========================================================= ");
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::parse_block_round(const cryptonote::blobdata &blob, cryptonote::block &bl, crypto::hash &bl_id, bool &error) const
@@ -3125,7 +3133,8 @@ void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_heigh
   cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response res = AUTO_VAL_INIT(res);
   req.block_ids = short_chain_history;
 
-  MDEBUG("Pulling blocks: start_height " << start_height);
+  MLOG_YELLOW(el::Level::Error, "==============================================================");
+  MLOG_YELLOW(el::Level::Error, "Pulling blocks: start_height " << start_height);
 
   req.prune = true;
   req.start_height = start_height;
@@ -3151,9 +3160,13 @@ void wallet2::pull_blocks(bool first, bool try_incremental, uint64_t start_heigh
   if (res.pool_info_extent != COMMAND_RPC_GET_BLOCKS_FAST::NONE)
     m_pool_info_query_time = res.daemon_time;
 
-  MDEBUG("Pulled blocks: blocks_start_height " << blocks_start_height << ", count " << blocks.size()
-      << ", height " << blocks_start_height + blocks.size() << ", node height " << res.current_height
-      << ", pool info " << static_cast<unsigned int>(res.pool_info_extent));
+  MLOG_YELLOW(el::Level::Error, "blocks_start_height : " << blocks_start_height);
+  MLOG_YELLOW(el::Level::Error, "m_refresh_from_block_height : " << m_refresh_from_block_height);
+  MLOG_YELLOW(el::Level::Error, "m_skip_to_height : " << m_skip_to_height);
+  MLOG_YELLOW(el::Level::Error, "start_height : " << start_height);
+  MLOG_YELLOW(el::Level::Error, "fast_refresh : m_first_refresh_done : " << m_first_refresh_done);
+  MLOG_YELLOW(el::Level::Error, "Pulled blocks: blocks_start_height " << blocks_start_height << ", count " << blocks.size()       << ", height " << blocks_start_height + blocks.size() << ", node height " << res.current_height       << ", pool info " << static_cast<unsigned int>(res.pool_info_extent));
+  MLOG_YELLOW(el::Level::Error, "==============================================================");
 
   if (first && !m_background_syncing)
   {
@@ -3185,8 +3198,8 @@ void wallet2::pull_hashes(uint64_t start_height, uint64_t &blocks_start_height, 
     bool r = net_utils::invoke_http_bin("/gethashes.bin", req, res, *m_http_client, rpc_timeout);
     THROW_ON_RPC_RESPONSE_ERROR(r, {}, res, "gethashes.bin", error::get_hashes_error, get_rpc_status(m_trusted_daemon, res.status));
   }
-
   blocks_start_height = res.start_height;
+  MLOG_YELLOW(el::Level::Error, " blocks_start_height : " << blocks_start_height );
   hashes = std::move(res.m_block_ids);
 }
 //----------------------------------------------------------------------------------------------------
@@ -4038,6 +4051,13 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   if (start_height > m_blockchain.size() || m_refresh_from_block_height > m_blockchain.size() || m_skip_to_height > m_blockchain.size()) {
     if (!start_height)
       start_height = std::max(m_refresh_from_block_height, m_skip_to_height);;
+    MLOG_YELLOW(el::Level::Error, "==============================================================");
+    MLOG_YELLOW(el::Level::Error, "fast_refresh : blocks_start_height : " << blocks_start_height);
+    MLOG_YELLOW(el::Level::Error, "fast_refresh : m_refresh_from_block_height : " << m_refresh_from_block_height);
+    MLOG_YELLOW(el::Level::Error, "fast_refresh : m_skip_to_height : " << m_skip_to_height);
+    MLOG_YELLOW(el::Level::Error, "fast_refresh : start_height : " << start_height);
+    MLOG_YELLOW(el::Level::Error, "fast_refresh : m_first_refresh_done : " << m_first_refresh_done);
+    MLOG_YELLOW(el::Level::Error, "==============================================================");
     // we can shortcut by only pulling hashes up to the start_height
     fast_refresh(start_height, blocks_start_height, short_chain_history);
     // regenerate the history now that we've got a full set of hashes
@@ -4094,6 +4114,15 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
       if (!last)
         tpool.submit(&waiter, [&]{pull_and_parse_next_blocks(first, try_incremental, start_height, next_blocks_start_height, short_chain_history, blocks, parsed_blocks, next_blocks, next_parsed_blocks, process_pool_txs, last, error, exception);});
 
+      MLOG_YELLOW(el::Level::Error, "==============================================================");
+      MLOG_YELLOW(el::Level::Error, "blocks_start_height : " << blocks_start_height);
+      MLOG_YELLOW(el::Level::Error, "m_refresh_from_block_height : " << m_refresh_from_block_height);
+      MLOG_YELLOW(el::Level::Error, "m_skip_to_height : " << m_skip_to_height);
+      MLOG_YELLOW(el::Level::Error, "start_height : " << start_height);
+      MLOG_YELLOW(el::Level::Error, "next_blocks_start_height : " << next_blocks_start_height);
+      MLOG_YELLOW(el::Level::Error, "fast_refresh : m_first_refresh_done : " << m_first_refresh_done);
+      MLOG_YELLOW(el::Level::Error, "==============================================================");
+
       if (!first)
       {
         try
@@ -4103,6 +4132,15 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
         catch (const tools::error::out_of_hashchain_bounds_error&)
         {
           MINFO("Daemon claims next refresh block is out of hash chain bounds, resetting hash chain");
+          MLOG_RED(el::Level::Error, "==============================================================");
+          MLOG_RED(el::Level::Error, "Daemon claims next refresh block is out of hash chain bounds, resetting hash chain");
+          MLOG_RED(el::Level::Error, "blocks_start_height : " << blocks_start_height);
+          MLOG_RED(el::Level::Error, "m_refresh_from_block_height : " << m_refresh_from_block_height);
+          MLOG_RED(el::Level::Error, "m_skip_to_height : " << m_skip_to_height);
+          MLOG_RED(el::Level::Error, "start_height : " << start_height);
+          MLOG_RED(el::Level::Error, "next_blocks_start_height : " << next_blocks_start_height);
+          MLOG_RED(el::Level::Error, "fast_refresh : m_first_refresh_done : " << m_first_refresh_done);
+          MLOG_RED(el::Level::Error, "==============================================================");          
           uint64_t stop_height = m_blockchain.offset();
           std::vector<crypto::hash> tip(m_blockchain.size() - m_blockchain.offset());
           for (size_t i = m_blockchain.offset(); i < m_blockchain.size(); ++i)

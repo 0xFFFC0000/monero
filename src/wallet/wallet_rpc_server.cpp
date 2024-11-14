@@ -59,7 +59,7 @@ using namespace epee;
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.rpc"
 
-#define DEFAULT_AUTO_REFRESH_PERIOD 20 // seconds
+#define DEFAULT_AUTO_REFRESH_PERIOD 10 // seconds
 #define REFRESH_INFICATIVE_BLOCK_CHUNK_SIZE 256    // just to split refresh in separate calls to play nicer with other threads
 
 #define CHECK_MULTISIG_ENABLED() \
