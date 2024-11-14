@@ -1312,9 +1312,7 @@ namespace cryptonote
     }
 
     {
-      MLOG_YELLOW(el::Level::Debug, context << " Got NEW BLOCKS inside of " << __FUNCTION__ << ": size: " << arg.blocks.size()
-          << ", blocks: " << start_height << " - " << (start_height + arg.blocks.size() - 1) <<
-          " (pruning seed " << epee::string_tools::to_string_hex(context.m_pruning_seed) << ")");
+      MLOG_YELLOW(el::Level::Debug, context << " Got NEW BLOCKS inside of " << __FUNCTION__ << ": size: " << arg.blocks.size()  << ", blocks: " << start_height << " - " << (start_height + arg.blocks.size() - 1) <<           " (pruning seed " << epee::string_tools::to_string_hex(context.m_pruning_seed) << ")"  );
 
       // add that new span to the block queue
       const boost::posix_time::time_duration dt = now - request_time;
