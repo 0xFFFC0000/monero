@@ -28,6 +28,8 @@
 
 #pragma once
 
+#include "common/command_line.h"
+
 #include <boost/filesystem/path.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>

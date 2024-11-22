@@ -27,6 +27,7 @@
 #pragma once
 
 #include <cstdint> // uint64_t
+#include <cstddef> // NULL
 
 #ifdef _WIN32
 #include <sysinfoapi.h> // GetSystemTimeAsFileTime

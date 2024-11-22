@@ -31,6 +31,8 @@
 #include "common/scoped_message_writer.h"
 #include "common/util.h"
 #include "daemonizer/posix_fork.h"
+#include "common/command_line.h"
+#include "daemonizer.h"
 
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>

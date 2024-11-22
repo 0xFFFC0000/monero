@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <cstdint> // uint64_t
 
 template<typename T, typename Tpod = T>
 class Stats

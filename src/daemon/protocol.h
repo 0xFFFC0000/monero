@@ -30,6 +30,13 @@
 
 #pragma once
 
+#include <boost/program_options.hpp>
+
+#include "misc_log_ex.h"
+#include "cryptonote_protocol/cryptonote_protocol_handler.h"
+#include "p2p/net_node.h"
+#include "daemon/core.h"
+
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "daemon"
 

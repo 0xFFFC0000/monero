@@ -30,6 +30,8 @@
 
 #include "time_helper.h"
 
+#include <boost/date_time.hpp>
+
 namespace epee
 {
 
