@@ -26,10 +26,13 @@
 
 #pragma once
 
+#include <string>
 #include <set>
 #include <list>
 #include <vector>
 #include <deque>
+#include <cstdint>
+#include <typeinfo>
 #include <boost/mpl/vector.hpp>
 #include <boost/mpl/contains_fwd.hpp>
 

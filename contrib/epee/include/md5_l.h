@@ -61,6 +61,7 @@ documentation and/or software.
 
 
 #include "md5global.h"
+#include "memwipe.h"
 
 namespace md5
 {

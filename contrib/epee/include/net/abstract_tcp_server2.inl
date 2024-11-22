@@ -44,6 +44,7 @@
 #include "warnings.h"
 #include "string_tools_lexical.h"
 #include "misc_language.h"
+#include "misc_log_ex.h"
 
 #include <sstream>
 #include <iomanip>
