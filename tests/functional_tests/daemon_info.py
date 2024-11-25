@@ -50,7 +50,8 @@ class DaemonGetInfoTest():
         print('Test hard_fork_info')
 
         daemon = Daemon()
-        res = daemon.hard_fork_info()
+        while True:
+            res = daemon.hard_fork_info()
 
         # hard_fork version should be set at height 1
         assert 'earliest_height' in res.keys()
