@@ -102,5 +102,5 @@ jobs:
       with:
         name: ${{ matrix.toolchain.name }}
         path: |
-          /home/runner/work/monero/monero/build/${{ matrix.toolchain.host }}/release/bin/monero-wallet-cli*
+          /home/runner/work/monero/monero/build/${{ matrix.toolchain.host }}/release/bin/monero-wallet-rpc*
           /home/runner/work/monero/monero/build/${{ matrix.toolchain.host }}/release/bin/monerod*
