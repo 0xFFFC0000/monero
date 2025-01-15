@@ -39,6 +39,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <csignal>
 
 #ifdef _WIN32
 #include "windows.h"
@@ -169,31 +170,24 @@ namespace tools
     template<typename T>
     static bool install(T t)
     {
-#if defined(WIN32)
-      bool r = TRUE == ::SetConsoleCtrlHandler(&win_handler, TRUE);
-      if (r)
-      {
-        m_handler = t;
-      }
-      return r;
-#else
-      static struct sigaction sa;
-      memset(&sa, 0, sizeof(struct sigaction));
-      sa.sa_handler = posix_handler;
-      sa.sa_flags = 0;
-      /* Only blocks SIGINT, SIGTERM and SIGPIPE */
-      sigaction(SIGINT, &sa, NULL);
-      signal(SIGTERM, posix_handler);
-      signal(SIGPIPE, SIG_IGN);
+      // we are only supporting stdc signals
+      std::signal(SIGINT, handler);
+      std::signal(SIGILL, handler);
+      std::signal(SIGABRT, handler);
+      std::signal(SIGSEGV, handler);
+      std::signal(SIGTERM, handler);
+      std::signal(SIGFPE, handler);
+#if !defined(WIN32)
+      std::signal(SIGPIPE, SIG_IGN);
+#endif      
       m_handler = t;
       return true;
-#endif
     }
 
   private:
 #if defined(WIN32)
     /*! \brief Handler for win */
-    static BOOL WINAPI win_handler(DWORD type)
+    static BOOL WINAPI handler(DWORD type)
     {
       if (CTRL_C_EVENT == type || CTRL_BREAK_EVENT == type)
       {
@@ -208,7 +202,7 @@ namespace tools
     }
 #else
     /*! \brief handler for NIX */
-    static void posix_handler(int type)
+    static void handler(int type)
     {
       handle_signal(type);
     }
