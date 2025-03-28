@@ -96,7 +96,7 @@ public:
       *block_height = h - 1;
     return top;
   }
-  virtual void pop_block(cryptonote::block &blk, std::vector<cryptonote::transaction> &txs) override { blocks.pop_back(); }
+  virtual void pop_block(cryptonote::block &blk, std::vector<cryptonote::transaction> &txs, bool purge = false) override { blocks.pop_back(); }
   virtual void set_hard_fork_version(uint64_t height, uint8_t version) override { if (height >= hf.size()) hf.resize(height + 1); hf[height] = version; }
   virtual uint8_t get_hard_fork_version(uint64_t height) const override { if (height >= hf.size()) return 255; return hf[height]; }
 

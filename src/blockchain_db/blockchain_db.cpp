@@ -311,7 +311,7 @@ void BlockchainDB::set_hard_fork(HardFork* hf)
   m_hardfork = hf;
 }
 
-void BlockchainDB::pop_block(block& blk, std::vector<transaction>& txs)
+void BlockchainDB::pop_block(block& blk, std::vector<transaction>& txs, bool purge)
 {
   blk = get_top_block();
 
@@ -322,8 +322,34 @@ void BlockchainDB::pop_block(block& blk, std::vector<transaction>& txs)
     cryptonote::transaction tx;
     if (!get_tx(h, tx) && !get_pruned_tx(h, tx))
       throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
-    txs.push_back(std::move(tx));
+    if (!purge)
+      txs.push_back(std::move(tx));
     remove_transaction(h);
+  }
+  remove_transaction(get_transaction_hash(blk.miner_tx));
+}
+
+void BlockchainDB::purge_block(block& blk, std::vector<transaction>& txs)
+{
+  std::unordered_set<crypto::key_image> images;
+  blk = get_top_block();
+  remove_block();
+
+  for (const auto& h : boost::adaptors::reverse(blk.tx_hashes))
+  {
+    cryptonote::transaction tx;
+    if (!get_tx(h, tx) && !get_pruned_tx(h, tx))
+      throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
+    // txs.push_back(std::move(tx));
+    for (const auto& in : tx.vin)
+    {
+      if (in.type() == typeid(txin_to_key))
+      {
+        images.insert(boost::get<txin_to_key>(in).k_image);
+        remove_spent_key(boost::get<txin_to_key>(in).k_image);
+      }
+    }
+    remove_transaction_data(get_transaction_hash(tx), tx);
   }
   remove_transaction(get_transaction_hash(blk.miner_tx));
 }
@@ -347,6 +373,23 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
 
   // need tx as tx.vout has the tx outputs, and the output amounts are needed
   remove_transaction_data(tx_hash, tx);
+}
+
+void BlockchainDB::bulk_remove_transactions(const std::vector<transaction>& txs)
+{
+  std::unordered_set<crypto::key_image> images;
+  for (const auto& tx : txs)
+  {
+    for (const auto& in : tx.vin)
+    {
+      if (in.type() == typeid(txin_to_key))
+      {
+        images.insert(boost::get<txin_to_key>(in).k_image);
+        remove_spent_key(boost::get<txin_to_key>(in).k_image);
+      }
+    }
+    remove_transaction_data(get_transaction_hash(tx), tx);
+  }
 }
 
 block BlockchainDB::get_block_from_height(const uint64_t& height) const

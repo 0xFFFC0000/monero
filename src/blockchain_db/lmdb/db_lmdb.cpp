@@ -4142,7 +4142,7 @@ uint64_t BlockchainLMDB::add_block(const std::pair<block, blobdata>& blk, size_t
   return ++m_height;
 }
 
-void BlockchainLMDB::pop_block(block& blk, std::vector<transaction>& txs)
+void BlockchainLMDB::pop_block(block& blk, std::vector<transaction>& txs, bool purge)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -4151,7 +4151,7 @@ void BlockchainLMDB::pop_block(block& blk, std::vector<transaction>& txs)
 
   try
   {
-    BlockchainDB::pop_block(blk, txs);
+    BlockchainDB::pop_block(blk, txs, purge);
     block_wtxn_stop();
   }
   catch (...)

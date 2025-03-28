@@ -90,7 +90,7 @@ public:
       *block_height = h - 1;
     return top;
   }
-  virtual void pop_block(cryptonote::block &blk, std::vector<cryptonote::transaction> &txs) override { blocks.pop_back(); }
+  virtual void pop_block(cryptonote::block &blk, std::vector<cryptonote::transaction> &txs, bool purge = false) override { blocks.pop_back(); }
 
 private:
   std::vector<block_t> blocks;

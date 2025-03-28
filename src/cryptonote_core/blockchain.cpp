@@ -550,7 +550,7 @@ bool Blockchain::deinit()
 //------------------------------------------------------------------
 // This function removes blocks from the top of blockchain.
 // It starts a batch and calls private method pop_block_from_blockchain().
-void Blockchain::pop_blocks(uint64_t nblocks)
+void Blockchain::pop_blocks(uint64_t nblocks, bool purge)
 {
   uint64_t i = 0;
   CRITICAL_REGION_LOCAL(m_tx_pool);
@@ -563,15 +563,120 @@ void Blockchain::pop_blocks(uint64_t nblocks)
     const uint64_t blockchain_height = m_db->height();
     if (blockchain_height > 0)
       nblocks = std::min(nblocks, blockchain_height - 1);
-    while (i < nblocks)
-    {
-      pop_block_from_blockchain();
-      ++i;
+
+
+    // if (purge) {
+    //   MWARNING("purge ...");
+    //   for (uint64_t i = 0; i < nblocks; ++i)
+    //   {
+    //     block blk = m_db->get_top_block();
+    //     m_db->remove_block();
+    
+    //     // Combine tx hashes with miner tx hash
+    //     std::vector<crypto::hash> all_hashes(blk.tx_hashes.begin(), blk.tx_hashes.end());
+    //     all_hashes.push_back(get_transaction_hash(blk.miner_tx));
+    
+    //     // Process transactions in reverse
+    //     for (auto it = all_hashes.rbegin(); it != all_hashes.rend(); ++it)
+    //     {
+    //       cryptonote::transaction tx;
+    //       try {
+    //         if (!m_db->get_tx(*it, tx) && !m_db->get_pruned_tx(*it, tx))
+    //           throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
+    //         for (const auto &in : tx.vin)
+    //         {
+    //           if (in.type() == typeid(txin_to_key))
+    //           {
+    //             m_db->remove_spent_key(boost::get<txin_to_key>(in).k_image);
+    //           }
+    //         }
+    //         m_db->remove_transaction_data(get_transaction_hash(tx), tx);
+    //         m_db->remove_transaction(*it);              
+    //       } 
+    //       catch (const std::exception& e) {
+    //           // MERROR("Transaction not found in DB: " << epee::string_tools::pod_to_hex(*it) << ", skipping...");
+    //           continue;            
+    //       }
+    //     }
+    //   }
+    // }      
+    if (purge) {
+      MWARNING("purge ...");
+      tools::threadpool& tpool = tools::threadpool::getInstanceForCompute();
+      tools::threadpool::waiter waiter(tpool);
+      std::mutex db_mutex;
+      std::vector<cryptonote::block> removing_blocks;
+      for (uint64_t i = 0; i < nblocks; ++i)
+      {
+        removing_blocks.push_back(m_db->get_top_block());
+        m_db->remove_block();
+      }
+      // go through each blocks 
+      for (uint64_t i = 0; i < nblocks; ++i)
+      {
+        tpool.submit(&waiter, [&, i] {
+          cryptonote::block blk = removing_blocks[i];
+          try {
+            for (const auto& h : boost::adaptors::reverse(blk.tx_hashes))
+            {
+              cryptonote::transaction tx;
+              if (!(m_db->get_tx(h, tx)) && !(m_db->get_pruned_tx(h, tx)))
+                throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
+              tx = m_db->get_pruned_tx(h);
+              for (const txin_v& tx_input : tx.vin)
+              {
+                if (tx_input.type() == typeid(txin_to_key))
+                {
+                  std::lock_guard<std::mutex> lock(db_mutex); // Add mutex
+                  if (!(m_db->get_tx(h, tx)) && !(m_db->get_pruned_tx(h, tx)))
+                    throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
+                  m_db->remove_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+                }
+              }
+              std::lock_guard<std::mutex> lock(db_mutex); // Add mutex
+              if (!(m_db->get_tx(h, tx)) && !(m_db->get_pruned_tx(h, tx)))
+                throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
+              m_db->remove_transaction_data(h, tx);
+            }
+            auto tx_hash = get_transaction_hash(blk.miner_tx);
+            transaction tx = m_db->get_pruned_tx(tx_hash);
+            for (const txin_v& tx_input : tx.vin)
+            {
+              if (tx_input.type() == typeid(txin_to_key))
+              {
+                std::lock_guard<std::mutex> lock(db_mutex); // Add mutex
+                if (!(m_db->get_tx(tx_hash, tx)) && !(m_db->get_pruned_tx(tx_hash, tx)))
+                  throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
+                m_db->remove_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+              }
+            }
+            std::lock_guard<std::mutex> lock(db_mutex); // Add mutex
+            if (!(m_db->get_tx(tx_hash, tx)) && !(m_db->get_pruned_tx(tx_hash, tx)))
+              throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
+            m_db->remove_transaction_data(tx_hash, tx);
+          }
+          catch (const std::exception& e) {
+            // MERROR("Caught: " << e.what());
+          }
+        });
+      }
+      if (!waiter.wait()) {
+        MERROR("Error waiting for threadpool to finish");
+      }
+
+    }
+    else {
+      MWARNING("pop ...");
+      while (i < nblocks)
+      {
+        pop_block_from_blockchain(purge);
+        ++i;
+      }
     }
   }
   catch (const std::exception& e)
   {
-    LOG_ERROR("Error when popping blocks after processing " << i << " blocks: " << e.what());
+    LOG_ERROR("Error when popping blocks after processing " << i << " blocks: " << e.what() << ", purge is " << purge);
     if (stop_batch)
       m_db->batch_abort();
     return;
@@ -592,7 +697,7 @@ void Blockchain::pop_blocks(uint64_t nblocks)
 // This function tells BlockchainDB to remove the top block from the
 // blockchain and then returns all transactions (except the miner tx, of course)
 // from it to the tx_pool
-block Blockchain::pop_block_from_blockchain()
+block Blockchain::pop_block_from_blockchain(bool purge)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
@@ -608,18 +713,18 @@ block Blockchain::pop_block_from_blockchain()
   const uint8_t previous_hf_version = get_current_hard_fork_version();
   try
   {
-    m_db->pop_block(popped_block, popped_txs);
+    m_db->pop_block(popped_block, popped_txs, purge);
   }
   // anything that could cause this to throw is likely catastrophic,
   // so we re-throw
   catch (const std::exception& e)
   {
-    LOG_ERROR("Error popping block from blockchain: " << e.what());
+    LOG_ERROR("Error popping block from blockchain: " << e.what() << ", purge is " << purge);
     throw;
   }
   catch (...)
   {
-    LOG_ERROR("Error popping block from blockchain, throwing!");
+    LOG_ERROR("Error popping block from blockchain, purge is " << purge << ", throwing!");
     throw;
   }
 

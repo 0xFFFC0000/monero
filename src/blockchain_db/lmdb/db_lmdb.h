@@ -333,7 +333,7 @@ public:
 
   bool block_rtxn_start(MDB_txn **mtxn, mdb_txn_cursors **mcur) const;
 
-  virtual void pop_block(block& blk, std::vector<transaction>& txs);
+  virtual void pop_block(block& blk, std::vector<transaction>& txs, bool purge = false);
 
   virtual bool can_thread_bulk_indices() const { return true; }
 
@@ -372,11 +372,14 @@ private:
                 , const crypto::hash& block_hash
                 );
 
+public:
   virtual void remove_block();
+  virtual void remove_spent_key(const crypto::key_image& k_image);
+  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx);
+private:
 
   virtual uint64_t add_transaction_data(const crypto::hash& blk_hash, const transaction& tx, epee::span<const std::uint8_t> blob, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash);
 
-  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx);
 
   virtual uint64_t add_output(const crypto::hash& tx_hash,
       const tx_out& tx_output,
@@ -396,8 +399,6 @@ private:
   virtual void prune_outputs(uint64_t amount);
 
   virtual void add_spent_key(const crypto::key_image& k_image);
-
-  virtual void remove_spent_key(const crypto::key_image& k_image);
 
   uint64_t num_outputs() const;
 

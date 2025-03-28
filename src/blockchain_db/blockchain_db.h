@@ -418,7 +418,10 @@ private:
    * If any of this cannot be done, the subclass should throw the corresponding
    * subclass of DB_EXCEPTION
    */
+  public:
   virtual void remove_block() = 0;
+  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx) = 0;
+  private:
 
   /**
    * @brief store the transaction and its metadata
@@ -459,7 +462,6 @@ private:
    * @param tx_hash the hash of the transaction to be removed
    * @param tx the transaction
    */
-  virtual void remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx) = 0;
 
   /**
    * @brief store an output
@@ -526,7 +528,6 @@ private:
    *
    * @param k_image the spent key image to remove
    */
-  virtual void remove_spent_key(const crypto::key_image& k_image) = 0;
 
 
   /*********************************************************************
@@ -535,10 +536,17 @@ private:
   /**
    * @brief private version of pop_block, for undoing if an add_block fails
    *
-   * This function simply calls pop_block(block& blk, std::vector<transaction>& txs)
+   * This function simply calls pop_block(block& blk, std::vector<transaction>& txs, bool purge)
    * with dummy parameters, as the returns-by-reference can be discarded.
    */
   void pop_block();
+
+public:
+  virtual void remove_spent_key(const crypto::key_image& k_image) = 0;
+  void purge_block(block& blk, std::vector<transaction>& txs);
+  void bulk_remove_transactions(const std::vector<transaction>& txs);
+  void remove_transaction(const crypto::hash& tx_hash);
+private:
 
   // helper function to remove transaction from blockchain
   /**
@@ -548,7 +556,6 @@ private:
    *
    * @param tx_hash the hash of the transaction to be removed
    */
-  void remove_transaction(const crypto::hash& tx_hash);
 
   uint64_t num_calls = 0;  //!< a performance metric
   uint64_t time_blk_hash = 0;  //!< a performance metric
@@ -1149,9 +1156,9 @@ public:
    *
    * @param blk return-by-reference the block which was popped
    * @param txs return-by-reference the transactions from the popped block
+   * @param purge if purge is enabled doesnt add popped txis to pool
    */
-  virtual void pop_block(block& blk, std::vector<transaction>& txs);
-
+  virtual void pop_block(block& blk, std::vector<transaction>& txs, bool purge = false);
 
   /**
    * @brief check if a transaction with a given hash exists
