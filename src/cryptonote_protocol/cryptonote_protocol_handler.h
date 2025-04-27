@@ -95,7 +95,8 @@ namespace cryptonote
       HANDLE_NOTIFY_T2(NOTIFY_RESPONSE_CHAIN_ENTRY, &cryptonote_protocol_handler::handle_response_chain_entry)
       HANDLE_NOTIFY_T2(NOTIFY_NEW_FLUFFY_BLOCK, &cryptonote_protocol_handler::handle_notify_new_fluffy_block)			
       HANDLE_NOTIFY_T2(NOTIFY_REQUEST_FLUFFY_MISSING_TX, &cryptonote_protocol_handler::handle_request_fluffy_missing_tx)						
-      HANDLE_NOTIFY_T2(NOTIFY_GET_TXPOOL_COMPLEMENT, &cryptonote_protocol_handler::handle_notify_get_txpool_complement)
+      HANDLE_NOTIFY_T2(NOTIFY_TX_POOL_INV, &cryptonote_protocol_handler::handle_notify_tx_pool_inv);
+      HANDLE_NOTIFY_T2(NOTIFY_REQUEST_TX_POOL_TXS, &cryptonote_protocol_handler::handle_request_tx_pool_txs);
     END_INVOKE_MAP2()
 
     bool on_idle();
@@ -144,6 +145,8 @@ namespace cryptonote
     int handle_notify_new_fluffy_block(int command, NOTIFY_NEW_FLUFFY_BLOCK::request& arg, cryptonote_connection_context& context);
     int handle_request_fluffy_missing_tx(int command, NOTIFY_REQUEST_FLUFFY_MISSING_TX::request& arg, cryptonote_connection_context& context);
     int handle_notify_get_txpool_complement(int command, NOTIFY_GET_TXPOOL_COMPLEMENT::request& arg, cryptonote_connection_context& context);
+    int handle_notify_tx_pool_inv(int command, NOTIFY_TX_POOL_INV::request& arg, cryptonote_connection_context& context);
+    int handle_request_tx_pool_txs(int command, NOTIFY_REQUEST_TX_POOL_TXS::request& arg, cryptonote_connection_context& context);
 		
     //----------------- i_bc_protocol_layout ---------------------------------------
     virtual bool relay_block(NOTIFY_NEW_FLUFFY_BLOCK::request& arg, cryptonote_connection_context& exclude_context);
@@ -192,6 +195,38 @@ namespace cryptonote
     uint64_t m_sync_download_chain_size, m_sync_download_objects_size;
     size_t m_block_download_max_size;
     bool m_sync_pruned_blocks;
+
+    struct tx_request_info { 
+
+      struct peer_request_hash {
+        std::size_t operator()(const std::pair<boost::uuids::uuid, bool>& p) const {
+          // We don't care about the bool value, so we only hash the UUID
+          return boost::hash<boost::uuids::uuid>()(p.first);
+        }
+      };
+    
+      std::unordered_set<std::pair<boost::uuids::uuid, bool /* is_requested */>, peer_request_hash> peer_ids; 
+      std::time_t request_time;
+
+      tx_request_info(std::pair<boost::uuids::uuid, bool> peer, std::time_t req_time)
+      : peer_ids({peer}), request_time(req_time) {};
+
+      void add_peer(const boost::uuids::uuid& uid, bool is_requested, std::time_t seen_time)
+      {
+        if (is_requested && !seen_time)
+          ASSERT_MES_AND_THROW("Request time must be set if is_requested is true");
+        peer_ids.insert({uid, is_requested});
+        if (is_requested)
+          request_time = seen_time;
+      }
+    };
+
+    // New member to track requested transactions:
+    std::unordered_map<crypto::hash, tx_request_info> m_requested_txs;
+
+    // Define a timeout (in seconds) after which a request is considered stale:
+    static constexpr std::time_t TX_REQUEST_TIMEOUT = 30;
+
 
     // Values for sync time estimates
     boost::posix_time::ptime m_sync_start_time;
