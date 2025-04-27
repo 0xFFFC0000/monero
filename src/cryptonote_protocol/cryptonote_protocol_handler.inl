@@ -883,6 +883,96 @@ namespace cryptonote
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
+  int t_cryptonote_protocol_handler<t_core>::handle_notify_tx_pool_inv(int command, NOTIFY_TX_POOL_INV::request& arg, cryptonote_connection_context& context)
+  {
+    MLOG_P2P_MESSAGE("Received NOTIFY_TX_POOL_INV (" << arg.txs.size() << " txes)");
+
+    // Create a list to hold transaction hashes missing in our local tx pool.
+    std::vector<crypto::hash> missing_tx_hashes;
+    std::time_t now_time = std::time(nullptr);
+
+    // Iterate over each advertised transaction hash and check our pool and our requested tracker.
+    for (const auto &tx_hash : arg.txs)
+    {
+      // If we have the tx in our pool, also remove it from m_requested_txs and skip.
+      if (m_core.pool_has_tx(tx_hash)) {
+        auto it = m_requested_txs.find(tx_hash);
+        if (it != m_requested_txs.end())
+          m_requested_txs.erase(it);
+        continue;
+      }
+
+      bool need_request = false;
+      auto it = m_requested_txs.find(tx_hash);
+      if (it == m_requested_txs.end())
+      {
+        // This tx has not been requested yet; mark it.
+        need_request = true;
+        m_requested_txs.insert({tx_hash, tx_request_info(std::make_pair(context.m_connection_id, true), now_time)});
+      }
+      else
+      {
+        // Already requested: if the last request was more than TX_REQUEST_TIMEOUT seconds ago,
+        // mark for re-request and update the timestamp (and add current peer).
+        if (now_time - it->second.request_time > TX_REQUEST_TIMEOUT)
+        {
+          need_request = true;
+          it->second.add_peer(context.m_connection_id, true, now_time);
+        }
+        else {
+          it->second.add_peer(context.m_connection_id, false, now_time);
+        }
+      }
+      if (need_request)
+        missing_tx_hashes.push_back(tx_hash);
+    }
+
+    // If there are missing transactions, send a RequestTxPoolTxs message.
+    if (!missing_tx_hashes.empty())
+    {
+      NOTIFY_REQUEST_TX_POOL_TXS::request req;
+      req.txs = std::move(missing_tx_hashes);
+      post_notify<NOTIFY_REQUEST_TX_POOL_TXS>(req, context);
+      MLOG_P2P_MESSAGE("Requested " << req.txs.size() << " missing transactions via RequestTxPoolTxs");
+    }
+    else
+    {
+      MLOG_P2P_MESSAGE("All advertised transactions are already in the pool or were requested recently");
+    }
+
+    return 1;
+  }
+  //------------------------------------------------------------------------------------------------------------------------
+  template<class t_core>
+  int t_cryptonote_protocol_handler<t_core>::handle_request_tx_pool_txs(int command, NOTIFY_REQUEST_TX_POOL_TXS::request& arg, cryptonote_connection_context& context)
+  {
+    MLOG_P2P_MESSAGE("Received NOTIFY_REQUEST_TX_POOL_TXS (" << arg.txs.size() << " txes)");
+
+    // Create a response (for new transactions)
+    NOTIFY_NEW_TRANSACTIONS::request response = {};
+
+    // Iterate over requested txin hashes
+    for (const auto &tx_hash : arg.txs)
+    {
+      // Attempt to get the transaction blob from the mempool;
+      cryptonote::blobdata tx_blob;
+      if (m_core.get_pool_transaction(tx_hash, tx_blob, cryptonote::relay_category::all))
+      {
+        response.txs.push_back(std::move(tx_blob));
+      }
+      // If tx is not in the pool, then ignore it (do not penalize peer)
+    }
+
+    // Send response if any txs found
+    if (!response.txs.empty())
+    {
+      post_notify<NOTIFY_NEW_TRANSACTIONS>(response, context);
+    }
+
+    return 1;
+  }
+  //------------------------------------------------------------------------------------------------------------------------
+  template<class t_core>
   int t_cryptonote_protocol_handler<t_core>::handle_notify_new_transactions(int command, NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& context)
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_NEW_TRANSACTIONS (" << arg.txs.size() << " txes)");

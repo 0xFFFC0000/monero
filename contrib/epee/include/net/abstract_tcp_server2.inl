@@ -45,6 +45,7 @@
 #include "warnings.h"
 #include "string_tools_lexical.h"
 #include "misc_language.h"
+#include "net/abstract_tcp_server2.h"
 
 #include <sstream>
 #include <iomanip>
