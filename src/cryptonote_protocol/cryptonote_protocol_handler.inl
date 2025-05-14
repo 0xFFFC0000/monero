@@ -209,6 +209,51 @@ namespace cryptonote
 
     m_block_download_max_size = command_line::get_arg(vm, cryptonote::arg_block_download_max_size);
     m_sync_pruned_blocks = command_line::get_arg(vm, cryptonote::arg_sync_pruned_blocks);
+    m_request_interval = command_line::get_arg(vm, cryptonote::arg_request_interval);
+
+    if (m_request_interval < 1 || m_request_interval > 3600)
+    {
+      MERROR("Request interval must be between 1 and 3600 seconds");
+      MERROR("Setting to default of 30 seconds");
+      m_request_interval = 30;
+    }
+
+    // Start a thread that periodically checks for stale requested transactions.
+    m_tx_check_thread = std::thread([this] () {
+      while (!m_stop_tx_check.load())
+      {
+        std::this_thread::sleep_for(std::chrono::seconds(m_request_interval));
+        std::time_t now = std::time(nullptr);
+        std::lock_guard<std::mutex> lock(m_requested_txs_mutex);
+        for (auto &it : m_requested_txs)
+        {
+          const crypto::hash &tx_hash = it.first;
+          TxRequestQueue &tx_info = it.second;
+          if ((now - tx_info.request_time) > m_request_interval)
+          {
+            MCINFO("net.p2p.msg", "Timeout for "
+                   << tx_hash << ", requesting it again, it has been "
+                   << (now - tx_info.request_time) << " seconds");
+            const boost::uuids::uuid peer = tx_info.request_from_next_peer(now);
+            if (peer.is_nil())
+            {
+              MCINFO("net.p2p.msg", "No peers to request from for tx " << tx_hash);
+              continue;
+            }
+            bool result = m_p2p->for_connection(peer, [&](cryptonote_connection_context &context, nodetool::peerid_type peer_id, uint32_t) -> bool {
+                MCINFO("net.p2p.msg", "Requesting tx " << tx_hash << " from peer " << epee::string_tools::to_string_hex(context.m_pruning_seed));
+                NOTIFY_REQUEST_TX_POOL_TXS::request req;
+                req.txs = {tx_hash};
+                post_notify<NOTIFY_REQUEST_TX_POOL_TXS>(req, context);
+                MCINFO("net.p2p.msg", "Requested " << req.txs.size() << " missing transactions via RequestTxPoolTxs");
+                return true;
+              });
+            if (!result)
+              MCINFO("net.p2p.msg", "Connection has been closed, not requesting tx " << tx_hash);
+          }
+        }
+      }
+    });
 
     return true;
   }
@@ -216,6 +261,9 @@ namespace cryptonote
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::deinit()
   {
+    m_stop_tx_check.store(true);
+    if (m_tx_check_thread.joinable())
+      m_tx_check_thread.join();
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -889,13 +937,15 @@ namespace cryptonote
 
     // Create a list to hold transaction hashes missing in our local tx pool.
     std::vector<crypto::hash> missing_tx_hashes;
-    std::time_t now_time = std::time(nullptr);
+    std::time_t now = std::time(nullptr);
 
     // Iterate over each advertised transaction hash and check our pool and our requested tracker.
     for (const auto &tx_hash : arg.txs)
     {
+      std::lock_guard<std::mutex> lock(m_requested_txs_mutex);
       // If we have the tx in our pool, also remove it from m_requested_txs and skip.
-      if (m_core.pool_has_tx(tx_hash)) {
+      if (m_core.pool_has_tx(tx_hash))
+      {
         auto it = m_requested_txs.find(tx_hash);
         if (it != m_requested_txs.end())
           m_requested_txs.erase(it);
@@ -908,19 +958,24 @@ namespace cryptonote
       {
         // This tx has not been requested yet; mark it.
         need_request = true;
-        m_requested_txs.insert({tx_hash, tx_request_info(std::make_pair(context.m_connection_id, true), now_time)});
+        m_requested_txs.emplace(
+          std::piecewise_construct,
+          std::forward_as_tuple(tx_hash),
+          std::forward_as_tuple(context.m_connection_id, true, now)
+        );
       }
       else
       {
-        // Already requested: if the last request was more than TX_REQUEST_TIMEOUT seconds ago,
+        // Already requested: if the last request was more than m_request_interval seconds ago,
         // mark for re-request and update the timestamp (and add current peer).
-        if (now_time - it->second.request_time > TX_REQUEST_TIMEOUT)
+        if (now - it->second.request_time > m_request_interval)
         {
           need_request = true;
-          it->second.add_peer(context.m_connection_id, true, now_time);
+          it->second.add_peer(context.m_connection_id, true, now);
         }
-        else {
-          it->second.add_peer(context.m_connection_id, false, now_time);
+        else
+        {
+          it->second.add_peer(context.m_connection_id, false, now);
         }
       }
       if (need_request)
