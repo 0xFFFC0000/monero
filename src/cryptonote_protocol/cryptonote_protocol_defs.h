@@ -377,7 +377,10 @@ namespace cryptonote
   };
 
   /************************************************************************/
-  /*                                                                      */
+  /* Announces new transaction hashes that
+  /* the sender believes the receiver may not have.
+  /* The receiver can pull which hashes are missing locally
+  /* and optionally request the actual serialized transactions for them.
   /************************************************************************/
   struct NOTIFY_TX_POOL_INV
   {
@@ -396,7 +399,10 @@ namespace cryptonote
   };
 
   /************************************************************************/
-  /*                                                                      */
+  /* Requests the actual transaction data corresponding
+  /* to a set of transaction hashes.
+  /* The receiver should look up each transaction in its own pool
+  /* or memory and respond with the serialized version, if known.
   /************************************************************************/
   struct NOTIFY_REQUEST_TX_POOL_TXS
   {

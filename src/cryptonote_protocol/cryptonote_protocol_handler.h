@@ -36,7 +36,6 @@
 
 #include <boost/program_options/variables_map.hpp>
 #include <string>
-#include <queue>
 
 #include "byte_slice.h"
 #include "math_helper.h"
@@ -50,6 +49,8 @@
 #include "cryptonote_basic/connection_context.h"
 #include "net/levin_base.h"
 #include "p2p/net_node_common.h"
+#include "peerinfo_manager.h"
+#include "request_manager.h"
 #include <boost/circular_buffer.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/nil_generator.hpp>
@@ -199,74 +200,13 @@ namespace cryptonote
     size_t m_block_download_max_size;
     bool m_sync_pruned_blocks;
 
-    struct TxRequestQueue
-    {
-    private:
-      mutable std::mutex m_queue_mutex;
-
-    public:
-      // Holds a single peer’s data:
-      struct peer_entry
-      {
-        const boost::uuids::uuid m_connection_id;
-        bool requested;
-        std::time_t seen_time;
-
-        peer_entry(const boost::uuids::uuid &id, bool r, std::time_t s)
-          : m_connection_id(id), requested(r), seen_time(s) {}
-      };
-
-      std::queue<peer_entry> peer_queue;
-      std::time_t request_time;
-
-      // Constructor that takes the first peer, sets request_time
-      TxRequestQueue(const boost::uuids::uuid &id, bool requested, std::time_t seen_time)
-        : request_time(seen_time)
-      {
-        std::lock_guard<std::mutex> lock(m_queue_mutex);
-        peer_queue.emplace(id, requested, seen_time);
-      }
-
-      // Add a peer to the queue; updates request_time if it was requested
-      void add_peer(const boost::uuids::uuid &id, bool is_requested, std::time_t seen_time)
-      {
-        if (is_requested && !seen_time)
-          ASSERT_MES_AND_THROW("Request time must be set if is_requested is true");
-
-        std::lock_guard<std::mutex> lock(m_queue_mutex);
-        peer_queue.emplace(id, is_requested, seen_time);
-        if (is_requested)
-          request_time = seen_time;
-      }
-
-      // Get the next peer that we haven’t requested from yet.
-      // If the front has already been requested and we consider it failed, pop it.
-      const boost::uuids::uuid request_from_next_peer(std::time_t now)
-      {
-        std::lock_guard<std::mutex> lock(m_queue_mutex);
-        while (!peer_queue.empty())
-        {
-          auto &front = peer_queue.front();
-          if (!front.requested) // not requested yet
-          {
-            front.requested = true;
-            request_time = now;
-            return front.m_connection_id;
-          }
-          peer_queue.pop(); // already requested and considered stale
-        }
-        return boost::uuids::nil_uuid();
-      }
-    };
-
-    // New member to track requested transactions:
-    std::unordered_map<crypto::hash, TxRequestQueue> m_requested_txs;
-    mutable std::mutex m_requested_txs_mutex;
+    PeerInfoManager m_peer_info_manager;
+    RequestManager m_request_manager;
 
     // Thread for checking the transaction requests
     std::thread m_tx_check_thread;
     std::atomic<bool> m_stop_tx_check{false};
-    std::time_t m_request_interval;
+    std::time_t m_request_deadline;
 
     // Values for sync time estimates
     boost::posix_time::ptime m_sync_start_time;

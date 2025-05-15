@@ -209,49 +209,47 @@ namespace cryptonote
 
     m_block_download_max_size = command_line::get_arg(vm, cryptonote::arg_block_download_max_size);
     m_sync_pruned_blocks = command_line::get_arg(vm, cryptonote::arg_sync_pruned_blocks);
-    m_request_interval = command_line::get_arg(vm, cryptonote::arg_request_interval);
+    m_request_deadline = command_line::get_arg(vm, cryptonote::arg_request_deadline);
 
-    if (m_request_interval < 1 || m_request_interval > 3600)
+    if (m_request_deadline < 1 || m_request_deadline > 3600)
     {
       MERROR("Request interval must be between 1 and 3600 seconds");
       MERROR("Setting to default of 30 seconds");
-      m_request_interval = 30;
+      m_request_deadline = 30;
     }
 
+    std::function<void(const crypto::hash&, TxRequestQueue&, const std::time_t)> check_each_request = [&] (const crypto::hash &tx_hash, TxRequestQueue &tx_request_queue, const std::time_t request_deadline) {
+    std::time_t now = std::time(nullptr);
+    if ((now - tx_request_queue.get_request_time()) > request_deadline)
+    {
+      MCINFO("net.p2p.msg", "Timeout for "
+              << tx_hash << ", requesting it again, it has been "
+              << (now - tx_request_queue.get_request_time()) << " seconds");
+      const boost::uuids::uuid peer_id = tx_request_queue.request_from_next_peer(now);
+      if (peer_id.is_nil())
+      {
+        MCINFO("net.p2p.msg", "No peers to request from for tx " << tx_hash);
+        return;
+      }
+      bool result = m_p2p->for_connection(peer_id, [&](cryptonote_connection_context &context, nodetool::peerid_type peer_id, uint32_t) -> bool {
+          MCINFO("net.p2p.msg", "Requesting tx " << tx_hash << " from peer " << epee::string_tools::to_string_hex(context.m_pruning_seed));
+          NOTIFY_REQUEST_TX_POOL_TXS::request req;
+          req.txs = {tx_hash};
+          post_notify<NOTIFY_REQUEST_TX_POOL_TXS>(req, context);
+          MCINFO("net.p2p.msg", "Requested " << req.txs.size() << " missing transactions via RequestTxPoolTxs");
+          return true;
+        });
+      if (!result)
+        MCINFO("net.p2p.msg", "Connection has been closed, not requesting tx " << tx_hash);
+    }
+  };
+
     // Start a thread that periodically checks for stale requested transactions.
-    m_tx_check_thread = std::thread([this] () {
+    m_tx_check_thread = std::thread([this, &check_each_request] () {
       while (!m_stop_tx_check.load())
       {
-        std::this_thread::sleep_for(std::chrono::seconds(m_request_interval));
-        std::time_t now = std::time(nullptr);
-        std::lock_guard<std::mutex> lock(m_requested_txs_mutex);
-        for (auto &it : m_requested_txs)
-        {
-          const crypto::hash &tx_hash = it.first;
-          TxRequestQueue &tx_info = it.second;
-          if ((now - tx_info.request_time) > m_request_interval)
-          {
-            MCINFO("net.p2p.msg", "Timeout for "
-                   << tx_hash << ", requesting it again, it has been "
-                   << (now - tx_info.request_time) << " seconds");
-            const boost::uuids::uuid peer = tx_info.request_from_next_peer(now);
-            if (peer.is_nil())
-            {
-              MCINFO("net.p2p.msg", "No peers to request from for tx " << tx_hash);
-              continue;
-            }
-            bool result = m_p2p->for_connection(peer, [&](cryptonote_connection_context &context, nodetool::peerid_type peer_id, uint32_t) -> bool {
-                MCINFO("net.p2p.msg", "Requesting tx " << tx_hash << " from peer " << epee::string_tools::to_string_hex(context.m_pruning_seed));
-                NOTIFY_REQUEST_TX_POOL_TXS::request req;
-                req.txs = {tx_hash};
-                post_notify<NOTIFY_REQUEST_TX_POOL_TXS>(req, context);
-                MCINFO("net.p2p.msg", "Requested " << req.txs.size() << " missing transactions via RequestTxPoolTxs");
-                return true;
-              });
-            if (!result)
-              MCINFO("net.p2p.msg", "Connection has been closed, not requesting tx " << tx_hash);
-          }
-        }
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        m_request_manager.for_each_request(check_each_request, m_request_deadline);
       }
     });
 
@@ -942,44 +940,19 @@ namespace cryptonote
     // Iterate over each advertised transaction hash and check our pool and our requested tracker.
     for (const auto &tx_hash : arg.txs)
     {
-      std::lock_guard<std::mutex> lock(m_requested_txs_mutex);
-      // If we have the tx in our pool, also remove it from m_requested_txs and skip.
+      // If we have the tx in our pool, also remove it from request manager and skip.
       if (m_core.pool_has_tx(tx_hash))
       {
-        auto it = m_requested_txs.find(tx_hash);
-        if (it != m_requested_txs.end())
-          m_requested_txs.erase(it);
+        m_request_manager.remove_transaction(tx_hash);
         continue;
       }
 
-      bool need_request = false;
-      auto it = m_requested_txs.find(tx_hash);
-      if (it == m_requested_txs.end())
-      {
-        // This tx has not been requested yet; mark it.
-        need_request = true;
-        m_requested_txs.emplace(
-          std::piecewise_construct,
-          std::forward_as_tuple(tx_hash),
-          std::forward_as_tuple(context.m_connection_id, true, now)
-        );
-      }
-      else
-      {
-        // Already requested: if the last request was more than m_request_interval seconds ago,
-        // mark for re-request and update the timestamp (and add current peer).
-        if (now - it->second.request_time > m_request_interval)
-        {
-          need_request = true;
-          it->second.add_peer(context.m_connection_id, true, now);
-        }
-        else
-        {
-          it->second.add_peer(context.m_connection_id, false, now);
-        }
-      }
-      if (need_request)
+      bool need_request = m_request_manager.add_transaction(tx_hash, context.m_connection_id, now);
+      m_peer_info_manager.add_announcement(context.m_connection_id);
+      if (need_request) {
+        m_peer_info_manager.add_requested_from_peer(context.m_connection_id);
         missing_tx_hashes.push_back(tx_hash);
+      }
     }
 
     // If there are missing transactions, send a RequestTxPoolTxs message.
@@ -1009,10 +982,12 @@ namespace cryptonote
     // Iterate over requested txin hashes
     for (const auto &tx_hash : arg.txs)
     {
+      m_peer_info_manager.add_requested_from_me(context.m_connection_id);
       // Attempt to get the transaction blob from the mempool;
       cryptonote::blobdata tx_blob;
       if (m_core.get_pool_transaction(tx_hash, tx_blob, cryptonote::relay_category::all))
       {
+        m_peer_info_manager.add_sent(context.m_connection_id);
         response.txs.push_back(std::move(tx_blob));
       }
       // If tx is not in the pool, then ignore it (do not penalize peer)
@@ -1079,25 +1054,41 @@ namespace cryptonote
     else
       stem_txs.reserve(arg.txs.size());
 
-    for (auto& tx : arg.txs)
+    for (auto& tx_blob : arg.txs)
     {
       tx_verification_context tvc{};
-      if (!m_core.handle_incoming_tx(tx, tvc, tx_relay, true) && !tvc.m_no_drop_offense)
+      if (!m_core.handle_incoming_tx(tx_blob, tvc, tx_relay, true))
       {
-        LOG_PRINT_CCONTEXT_L1("Tx verification failed, dropping connection");
-        drop_connection(context, false, false);
-        return 1;
+        if (!tvc.m_no_drop_offense)
+        {
+          LOG_PRINT_CCONTEXT_L1("Tx verification failed, dropping connection");
+          drop_connection(context, false, false);
+          return 1;
+        }
+      }
+      else
+      {
+        m_peer_info_manager.add_received(context.m_connection_id);
+        // This is extremely inefficient. We have to change m_core.handle_incoming_tx
+        // we are already parsing inside handle_incoming_tx
+        transaction tx;
+        crypto::hash tx_hash;
+        if (cryptonote::parse_and_validate_tx_from_blob(tx_blob, tx, tx_hash)
+            && m_request_manager.already_requested_tx(tx_hash))
+        {
+          m_request_manager.remove_transaction(tx_hash);
+        }
       }
 
       switch (tvc.m_relay)
       {
         case relay_method::local:
         case relay_method::stem:
-          stem_txs.push_back(std::move(tx));
+          stem_txs.push_back(std::move(tx_blob));
           break;
         case relay_method::block:
         case relay_method::fluff:
-          fluff_txs.push_back(std::move(tx));
+          fluff_txs.push_back(std::move(tx_blob));
           break;
         default:
         case relay_method::forward: // not supposed to happen here
