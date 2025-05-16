@@ -224,7 +224,7 @@ namespace cryptonote
     m_tx_request_handler.update_request_deadline(request_deadline);
 
     m_tx_requests_runner =
-    [&] (const crypto::hash &tx_hash, TxRequestQueue &tx_request_queue, const std::time_t request_deadline)
+    [&] (const crypto::hash &tx_hash, tx_request_queue &tx_request_queue, const std::time_t request_deadline)
     {
       std::time_t now = std::time(nullptr);
       if ((now - tx_request_queue.get_request_time()) > request_deadline)

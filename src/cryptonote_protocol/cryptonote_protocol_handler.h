@@ -202,10 +202,10 @@ namespace cryptonote
     size_t m_block_download_max_size;
     bool m_sync_pruned_blocks;
 
-    PeerInfoManager m_peer_info_manager;
-    RequestManager m_request_manager;
-    TxRequestHandler m_tx_request_handler;
-    TxRequestHandler::TxRequestsHandlerRunner m_tx_requests_runner;
+    peer_info_manager m_peer_info_manager;
+    request_manager m_request_manager;
+    tx_request_handler m_tx_request_handler;
+    tx_request_handler::tx_request_handler_runner m_tx_requests_runner;
 
     // Values for sync time estimates
     boost::posix_time::ptime m_sync_start_time;

@@ -46,28 +46,28 @@
 #include <shared_mutex>
 #include <unordered_map>
 
-class RequestManager {
+class request_manager {
 
-  using RWLock = std::shared_timed_mutex;
-  using ReadLock = std::shared_lock<RWLock>;
-  using WriteLock = std::unique_lock<RWLock>;
+  using rw_lock = std::shared_timed_mutex;
+  using read_lock = std::shared_lock<rw_lock>;
+  using write_lock = std::unique_lock<rw_lock>;
 
 private:
   // Track requested transactions
-  std::unordered_map<crypto::hash, TxRequestQueue> m_requested_txs;
-  mutable RWLock lock;
+  std::unordered_map<crypto::hash, tx_request_queue> m_requested_txs;
+  mutable rw_lock m_lock;
 
-  RequestManager &operator=(const RequestManager &other) = delete;
-  RequestManager(const RequestManager &other) = delete;
-  bool operator>(const RequestManager &other) const = delete;
-  bool operator<(const RequestManager &other) const = delete;
+  request_manager &operator=(const request_manager &other) = delete;
+  request_manager(const request_manager &other) = delete;
+  bool operator>(const request_manager &other) const = delete;
+  bool operator<(const request_manager &other) const = delete;
 
 public:
-  RequestManager() : m_requested_txs(), lock() {}
+  request_manager() : m_requested_txs(), m_lock() {}
 
   bool remove_transaction(const crypto::hash &tx_hash) {
     MINFO("Removing transaction: " << epee::string_tools::pod_to_hex(tx_hash));
-    WriteLock wlock(lock);
+    write_lock w_lock(m_lock);
     auto it = m_requested_txs.find(tx_hash);
     if (it != m_requested_txs.end()) {
       m_requested_txs.erase(it);
@@ -77,7 +77,7 @@ public:
   }
 
   bool already_requested_tx(const crypto::hash &tx_hash) const {
-    ReadLock rlock(lock);
+    read_lock r_lock(m_lock);
     return m_requested_txs.find(tx_hash) != m_requested_txs.end();
   }
 
@@ -87,8 +87,8 @@ public:
           << epee::string_tools::pod_to_hex(tx_hash)
           << ", from peer: " << epee::string_tools::pod_to_hex(id)
           << ", first seen: " << first_seen);
-    WriteLock wlock(lock);
-    m_requested_txs.emplace(tx_hash, TxRequestQueue(id, first_seen));
+    write_lock w_lock(m_lock);
+    m_requested_txs.emplace(tx_hash, tx_request_queue(id, first_seen));
   }
 
   void add_peer(const crypto::hash &tx_hash, const boost::uuids::uuid &id,
@@ -97,7 +97,7 @@ public:
                           << " to transaction: "
                           << epee::string_tools::pod_to_hex(tx_hash)
                           << ", first seen: " << first_seen);
-    WriteLock wlock(lock);
+    write_lock w_lock(m_lock);
     auto it = m_requested_txs.find(tx_hash);
     if (it != m_requested_txs.end()) {
       it->second.add_peer(id, first_seen);
@@ -123,12 +123,12 @@ public:
 
   void
   for_each_request(std::function<void(const crypto::hash &tx_hash,
-                                      TxRequestQueue &request_queue,
+                                      tx_request_queue &request_queue,
                                       const std::time_t request_deadline)> &f,
                    const std::time_t m_request_deadline) {
     MINFO("Iterating over requested transactions for deadline: "
           << m_request_deadline);
-    ReadLock rlock(lock);
+    read_lock r_lock(m_lock);
     for (auto &pair : m_requested_txs) {
       f(pair.first, pair.second, m_request_deadline);
     }

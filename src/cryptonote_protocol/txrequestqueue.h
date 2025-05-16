@@ -52,10 +52,10 @@
  * track of the time the last request was made. It provides capabilities
  * to add a new peer and to retrieve the next peer that hasn't been requested.
  */
-class TxRequestQueue {
-  using RWLock = std::shared_timed_mutex;
-  using ReadLock = std::shared_lock<RWLock>;
-  using WriteLock = std::unique_lock<RWLock>;
+class tx_request_queue {
+  using rw_lock = std::shared_timed_mutex;
+  using read_lock = std::shared_lock<rw_lock>;
+  using write_lock = std::unique_lock<rw_lock>;
 
 private:
   /**
@@ -64,35 +64,35 @@ private:
    * Contains the peer's connection UUID, the request status, and the time
    * the requested tx was first seen.
    */
-  class TxRequest {
+  class tx_request {
     const boost::uuids::uuid from_connection_id;
     const std::time_t first_seen;
     std::time_t request_time;
 
-    TxRequest &operator=(const TxRequest &other) = delete;
-    TxRequest(const TxRequest &other) = delete;
-    bool operator>(const TxRequest &other) const = delete;
-    bool operator<(const TxRequest &other) const = delete;
+    tx_request &operator=(const tx_request &other) = delete;
+    tx_request(const tx_request &other) = delete;
+    bool operator>(const tx_request &other) const = delete;
+    bool operator<(const tx_request &other) const = delete;
 
   public:
-    struct Order {
-      bool operator()(const TxRequest &lhs, const TxRequest &rhs) const {
+    struct order {
+      bool operator()(const tx_request &lhs, const tx_request &rhs) const {
         return lhs.from_connection_id != rhs.from_connection_id &&
                lhs.first_seen < rhs.first_seen;
       }
     };
 
-    TxRequest(const boost::uuids::uuid &id, std::time_t s)
+    tx_request(const boost::uuids::uuid &id, std::time_t s)
         : from_connection_id(id), first_seen(s), request_time(0) {}
 
-    TxRequest(TxRequest &&other) noexcept
+    tx_request(tx_request &&other) noexcept
         : from_connection_id(other.from_connection_id),
           first_seen(other.first_seen), request_time(other.request_time) {}
 
-    bool operator==(const TxRequest &other) const {
+    bool operator==(const tx_request &other) const {
       return from_connection_id == other.get_connection_id();
     }
-    bool operator!=(const TxRequest &other) const {
+    bool operator!=(const tx_request &other) const {
       return from_connection_id != other.get_connection_id();
     }
 
@@ -108,27 +108,27 @@ private:
     void set_request_time(std::time_t time) { request_time = time; }
   };
 
-  mutable RWLock lock;
-  std::set<TxRequest, TxRequest::Order> request_queue;
+  mutable rw_lock m_lock;
+  std::set<tx_request, tx_request::order> request_queue;
 
-  TxRequestQueue &operator=(const TxRequestQueue &other) = delete;
-  TxRequestQueue(const TxRequestQueue &other) = delete;
-  bool operator>(const TxRequestQueue &other) const = delete;
-  bool operator<(const TxRequestQueue &other) const = delete;
+  tx_request_queue &operator=(const tx_request_queue &other) = delete;
+  tx_request_queue(const tx_request_queue &other) = delete;
+  bool operator>(const tx_request_queue &other) const = delete;
+  bool operator<(const tx_request_queue &other) const = delete;
 
 public:
   // Constructor that takes the first peer
-  TxRequestQueue(const boost::uuids::uuid &id, std::time_t first_seen) {
+  tx_request_queue(const boost::uuids::uuid &id, std::time_t first_seen) {
     MINFO("Creating request queue with ID: "
           << epee::string_tools::pod_to_hex(id)
           << ", first seen: " << first_seen);
-    WriteLock w_lock(lock);
-    TxRequest request(id, first_seen);
+    write_lock w_lock(m_lock);
+    tx_request request(id, first_seen);
     request.submit_request(first_seen);
     request_queue.emplace(std::move(request));
   }
 
-  TxRequestQueue(TxRequestQueue &&other) noexcept
+  tx_request_queue(tx_request_queue &&other) noexcept
       : request_queue(std::move(other.request_queue)) {
     // No need to lock the mutex here, as the other object is being moved
     // and will not be used anymore.
@@ -141,8 +141,8 @@ public:
     MINFO("Adding " << epee::string_tools::pod_to_hex(id)
                     << " to request queue "
                     << epee::string_tools::pod_to_hex(first_seen));
-    WriteLock w_lock(lock);
-    TxRequest request(id, first_seen);
+    write_lock w_lock(m_lock);
+    tx_request request(id, first_seen);
     // only add if it is not already in the queue
     if (request_queue.find(request) == request_queue.end()) {
       request_queue.insert(std::move(request));
@@ -151,7 +151,7 @@ public:
 
   std::time_t get_request_time() const {
     MINFO("Getting request time");
-    ReadLock r_lock(lock);
+    read_lock r_lock(m_lock);
     if (!request_queue.empty()) {
       MINFO("Connection ID: " << epee::string_tools::pod_to_hex(
                                      request_queue.begin()->get_connection_id())
@@ -166,11 +166,11 @@ public:
   // If the front has already been requested and we consider it failed, pop it.
   boost::uuids::uuid request_from_next_peer(std::time_t now) {
     MINFO("Requesting from next peer");
-    WriteLock w_lock(lock);
+    write_lock w_lock(m_lock);
     while (!request_queue.empty()) {
       // Get the front of the queue, and strip constness
       // Since we don't modify data which would change the order
-      TxRequest &front = const_cast<TxRequest &>(*request_queue.begin());
+      tx_request &front = const_cast<tx_request &>(*request_queue.begin());
       if (!front.is_request_submitted()) // not requested yet
       {
         front.submit_request(now);
@@ -187,13 +187,12 @@ public:
 
   boost::uuids::uuid get_current_request_peer_id() const {
     MINFO("Getting current request peer ID");
-    ReadLock r_lock(lock);
+    read_lock r_lock(m_lock);
     if (!request_queue.empty()) {
       return request_queue.begin()->get_connection_id();
     }
     return boost::uuids::nil_uuid();
   }
-
 };
 
 #endif // CRYPTONOTE_PROTOCOL_TXREQUESTQUEUE_H

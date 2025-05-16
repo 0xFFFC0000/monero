@@ -49,15 +49,15 @@
 #include "misc_log_ex.h"
 #include "string_tools.h"
 
-class PeerInfoManager {
+class peer_info_manager {
 
   constexpr static size_t FAILURE_THRESHOLD_PERCENTAGE = 70;
 
 public:
-  class PeerInfo {
-    using RWLock = std::shared_timed_mutex;
-    using ReadLock = std::shared_lock<RWLock>;
-    using WriteLock = std::unique_lock<RWLock>;
+  class peer_info {
+    using rw_lock = std::shared_timed_mutex;
+    using read_lock = std::shared_lock<rw_lock>;
+    using write_lock = std::unique_lock<rw_lock>;
 
   private:
     boost::uuids::uuid m_connection_id;
@@ -67,15 +67,15 @@ public:
     size_t m_requested_from_peer = 0;
     size_t m_sent = 0;
     size_t m_missed = 0;
-    mutable RWLock lock;
+    mutable rw_lock m_lock;
 
   public:
-    PeerInfo(const boost::uuids::uuid &id)
+    peer_info(const boost::uuids::uuid &id)
         : m_connection_id(id), m_announcements(0), m_received(0),
           m_requested_from_me(0), m_requested_from_peer(0), m_sent(0),
-          m_missed(0), lock() {}
+          m_missed(0), m_lock() {}
 
-    PeerInfo(PeerInfo &&other) noexcept
+    peer_info(peer_info &&other) noexcept
         : m_connection_id(other.m_connection_id),
           m_announcements(other.m_announcements), m_received(other.m_received),
           m_requested_from_me(other.m_requested_from_me),
@@ -84,30 +84,30 @@ public:
       // The lock is not moved. Each moved-to object gets its own
     }
 
-    struct Hash {
-      std::size_t operator()(const PeerInfo &p) const {
+    struct hash {
+      std::size_t operator()(const peer_info &p) const {
         // We don't care about the bool value, so we only hash the UUID
         return boost::hash<boost::uuids::uuid>()(p.get_connection_id());
       }
     };
 
-    PeerInfo &operator=(const PeerInfo &other) = delete;
-    PeerInfo(const PeerInfo &other) = delete;
-    bool operator>(const PeerInfo &other) const = delete;
-    bool operator<(const PeerInfo &other) const = delete;
+    peer_info &operator=(const peer_info &other) = delete;
+    peer_info(const peer_info &other) = delete;
+    bool operator>(const peer_info &other) const = delete;
+    bool operator<(const peer_info &other) const = delete;
 
-    bool operator==(const PeerInfo &other) const {
-      ReadLock r_lock(lock);
+    bool operator==(const peer_info &other) const {
+      read_lock r_lock(m_lock);
       return m_connection_id == other.get_connection_id();
     }
 
-    bool operator!=(const PeerInfo &other) const {
-      ReadLock r_lock(lock);
+    bool operator!=(const peer_info &other) const {
+      read_lock r_lock(m_lock);
       return m_connection_id != other.get_connection_id();
     }
 
     void reset() {
-      WriteLock w_lock(lock);
+      write_lock w_lock(m_lock);
       m_announcements.clear();
       m_received = 0;
       m_requested_from_me = 0;
@@ -115,57 +115,57 @@ public:
     }
 
     void add_announcement(const crypto::hash &tx_hash) {
-      WriteLock w_lock(lock);
+      write_lock w_lock(m_lock);
       m_announcements.insert(tx_hash);
     }
 
     void add_received() {
-      WriteLock w_lock(lock);
+      write_lock w_lock(m_lock);
       ++m_received;
     }
 
     void add_requested_from_me() {
-      WriteLock w_lock(lock);
+      write_lock w_lock(m_lock);
       ++m_requested_from_me;
     }
 
     void add_requested_from_peer() {
-      WriteLock w_lock(lock);
+      write_lock w_lock(m_lock);
       ++m_requested_from_peer;
     }
 
     void add_sent() {
-      WriteLock w_lock(lock);
+      write_lock w_lock(m_lock);
       ++m_sent;
     }
 
     void add_missed() {
-      WriteLock w_lock(lock);
+      write_lock w_lock(m_lock);
       ++m_missed;
     }
 
     size_t get_announcement_size() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
       return m_announcements.size();
     }
 
     size_t get_received() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
       return m_received;
     }
 
     size_t get_requested_from_me() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
       return m_requested_from_me;
     }
 
     size_t get_requested_from_peer() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
       return m_requested_from_peer;
     }
 
     size_t get_sent() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
       return m_sent;
     }
 
@@ -174,18 +174,18 @@ public:
     }
 
     size_t get_total() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
       return m_announcements.size() + m_received + m_requested_from_me +
              m_requested_from_peer + m_sent;
     }
 
     size_t get_missed() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
       return m_missed;
     }
 
     std::string get_info() const {
-      ReadLock r_lock(lock);
+      read_lock r_lock(m_lock);
 
       std::ostringstream oss;
       oss << "Peer ID: " << epee::string_tools::pod_to_hex(m_connection_id)
@@ -199,26 +199,28 @@ public:
   };
 
 private:
-  std::unordered_set<PeerInfo, PeerInfo::Hash> m_peer_info;
+  std::unordered_set<peer_info, peer_info::hash> m_peer_info;
 
 public:
-  PeerInfoManager() = default;
+  peer_info_manager() = default;
 
   void add_peer(const boost::uuids::uuid &id) { m_peer_info.emplace(id); }
 
   void remove_peer(const boost::uuids::uuid &id) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       m_peer_info.erase(it);
     }
   }
 
   std::string get_peer_info(const boost::uuids::uuid &id) const {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       return it->get_info();
     }
@@ -236,86 +238,93 @@ public:
   }
 
   void reset_peer_info(const boost::uuids::uuid &id) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       // We need to cast away constness, since we don't change hash of the
       // object
-      const_cast<PeerInfo &>(*it).reset();
+      const_cast<peer_info &>(*it).reset();
     }
   }
 
   void add_announcement(const boost::uuids::uuid &id,
                         const crypto::hash &tx_hash) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
-      const_cast<PeerInfo &>(*it).add_announcement(tx_hash);
+      const_cast<peer_info &>(*it).add_announcement(tx_hash);
     } else {
-      PeerInfo new_peer(id);
+      peer_info new_peer(id);
       new_peer.add_announcement(tx_hash);
       m_peer_info.emplace(std::move(new_peer));
     }
   }
 
   void add_received(const boost::uuids::uuid &id) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
-      const_cast<PeerInfo &>(*it).add_received();
+      const_cast<peer_info &>(*it).add_received();
     } else {
-      PeerInfo new_peer(id);
+      peer_info new_peer(id);
       new_peer.add_received();
       m_peer_info.emplace(std::move(new_peer));
     }
   }
 
   void add_requested_from_me(const boost::uuids::uuid &id) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
-      const_cast<PeerInfo &>(*it).add_requested_from_me();
+      const_cast<peer_info &>(*it).add_requested_from_me();
     } else {
-      PeerInfo new_peer(id);
+      peer_info new_peer(id);
       new_peer.add_requested_from_me();
       m_peer_info.emplace(std::move(new_peer));
     }
   }
 
   void add_requested_from_peer(const boost::uuids::uuid &id) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
-      const_cast<PeerInfo &>(*it).add_requested_from_peer();
+      const_cast<peer_info &>(*it).add_requested_from_peer();
     } else {
-      PeerInfo new_peer(id);
+      peer_info new_peer(id);
       new_peer.add_requested_from_peer();
       m_peer_info.emplace(std::move(new_peer));
     }
   }
 
   void add_sent(const boost::uuids::uuid &id) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
-      const_cast<PeerInfo &>(*it).add_sent();
+      const_cast<peer_info &>(*it).add_sent();
     } else {
-      PeerInfo new_peer(id);
+      peer_info new_peer(id);
       new_peer.add_sent();
       m_peer_info.emplace(std::move(new_peer));
     }
   }
 
   size_t get_announcement(const boost::uuids::uuid &id) const {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       return it->get_announcement_size();
     }
@@ -323,9 +332,10 @@ public:
   }
 
   size_t get_received(const boost::uuids::uuid &id) const {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       return it->get_received();
     }
@@ -333,9 +343,10 @@ public:
   }
 
   size_t get_requested_from_me(const boost::uuids::uuid &id) const {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       return it->get_requested_from_me();
     }
@@ -343,9 +354,10 @@ public:
   }
 
   size_t get_requested_from_peer(const boost::uuids::uuid &id) const {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       return it->get_requested_from_peer();
     }
@@ -353,9 +365,10 @@ public:
   }
 
   size_t get_sent(const boost::uuids::uuid &id) const {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       return it->get_sent();
     }
@@ -363,9 +376,10 @@ public:
   }
 
   size_t get_total(const boost::uuids::uuid &id) const {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
       return it->get_total();
     }
@@ -374,11 +388,12 @@ public:
 
   bool missed_announced_tx(const boost::uuids::uuid &id,
                            const crypto::hash &tx_hash) {
-    auto it = std::find_if(
-        m_peer_info.begin(), m_peer_info.end(),
-        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    auto it = std::find_if(m_peer_info.begin(), m_peer_info.end(),
+                           [&id](const peer_info &peer) {
+                             return peer.get_connection_id() == id;
+                           });
     if (it != m_peer_info.end()) {
-      const_cast<PeerInfo &>(*it).add_missed();
+      const_cast<peer_info &>(*it).add_missed();
       // FAILURE_THRESHOLD_PERCENTAGE% of the announcements are missed
       return (it->get_missed() * 100 / it->get_announcement_size()) >
              FAILURE_THRESHOLD_PERCENTAGE;

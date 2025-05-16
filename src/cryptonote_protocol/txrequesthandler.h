@@ -43,25 +43,26 @@
 #include "request_manager.h"
 #include "txrequestqueue.h"
 
-class TxRequestHandler {
+class tx_request_handler {
 public:
-  typedef std::function<void(const crypto::hash &, TxRequestQueue &, long int)>
-      TxRequestsHandlerRunner;
+  typedef std::function<void(const crypto::hash &, tx_request_queue &,
+                             const std::time_t)>
+      tx_request_handler_runner;
 
 private:
   // Disable everything that can be disabled
   // to prevent misuse of the class
-  TxRequestHandler() = delete;
-  TxRequestHandler(TxRequestHandler &&other) noexcept = delete;
-  TxRequestHandler(const TxRequestHandler &other) = delete;
-  TxRequestHandler &operator=(TxRequestHandler &&other) = delete;
-  TxRequestHandler &operator=(const TxRequestHandler &other) = delete;
-  TxRequestHandler *operator&() = delete;
-  bool operator>(const TxRequestHandler &other) const = delete;
-  bool operator<(const TxRequestHandler &other) const = delete;
-  bool operator==(const TxRequestHandler &other) const = delete;
-  bool operator!=(const TxRequestHandler &other) const = delete;
-  void swap(TxRequestHandler &) = delete;
+  tx_request_handler() = delete;
+  tx_request_handler(tx_request_handler &&other) noexcept = delete;
+  tx_request_handler(const tx_request_handler &other) = delete;
+  tx_request_handler &operator=(tx_request_handler &&other) = delete;
+  tx_request_handler &operator=(const tx_request_handler &other) = delete;
+  tx_request_handler *operator&() = delete;
+  bool operator>(const tx_request_handler &other) const = delete;
+  bool operator<(const tx_request_handler &other) const = delete;
+  bool operator==(const tx_request_handler &other) const = delete;
+  bool operator!=(const tx_request_handler &other) const = delete;
+  void swap(tx_request_handler &) = delete;
   operator bool() const = delete;
   auto operator->() = delete;
   auto operator*() = delete;
@@ -72,34 +73,33 @@ private:
   void operator()() = delete;
 
 public:
-  TxRequestHandler(RequestManager &request_manager,
-                   TxRequestsHandlerRunner &handler_runner,
-                   std::time_t request_deadline = 30)
+  tx_request_handler(request_manager &request_manager,
+                     tx_request_handler_runner &handler_runner,
+                     std::time_t request_deadline = 30)
       : m_handler_thread(), m_stop_handler_thread(false),
-        m_handler_runner(handler_runner),
-        m_request_deadline(request_deadline),
+        m_handler_runner(handler_runner), m_request_deadline(request_deadline),
         m_request_manager(request_manager) {}
 
-  ~TxRequestHandler() { deinit(); }
+  ~tx_request_handler() { deinit(); }
 
-  /* 
-    * \brief Start the thread that will check the transaction requests
-    *
-    * This function will start a thread that will check the transaction
-    * requests every m_request_deadline seconds. The thread will call the
-    * m_handler_runner function for each request in the request manager.
-    *
-    * This function assumes that the request manager is already
-    * initialized and that the request handler runner is already set.
-    * The thread will run until the m_stop_handler_thread variable is set to
-    * true.
-    */
+  /*
+   * \brief Start the thread that will check the transaction requests
+   *
+   * This function will start a thread that will check the transaction
+   * requests every m_request_deadline seconds. The thread will call the
+   * m_handler_runner function for each request in the request manager.
+   *
+   * This function assumes that the request manager is already
+   * initialized and that the request handler runner is already set.
+   * The thread will run until the m_stop_handler_thread variable is set to
+   * true.
+   */
   void start() {
     m_handler_thread = std::thread([this]() {
       while (!m_stop_handler_thread) {
+        tx_request_handler_runner &runner = m_handler_runner;
         std::this_thread::sleep_for(std::chrono::seconds(m_request_deadline));
-        m_request_manager.for_each_request(m_handler_runner,
-                                           m_request_deadline);
+        m_request_manager.for_each_request(runner, m_request_deadline);
       }
     });
   }
@@ -122,8 +122,8 @@ private:
   std::thread m_handler_thread;
   std::atomic<bool> m_stop_handler_thread{false};
   std::atomic<std::time_t> m_request_deadline;
-  TxRequestsHandlerRunner &m_handler_runner;
-  RequestManager &m_request_manager;
+  tx_request_handler_runner &m_handler_runner;
+  request_manager &m_request_manager;
 };
 
 #endif // CRYPTONOTE_PROTOCOL_TXREQUESTHANDLER_H
