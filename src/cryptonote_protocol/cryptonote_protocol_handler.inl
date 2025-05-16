@@ -186,8 +186,11 @@ namespace cryptonote
                                                                                                               m_synchronized(offline),
                                                                                                               m_ask_for_txpool_complement(true),
                                                                                                               m_stopping(false),
-                                                                                                              m_no_sync(false)
-
+                                                                                                              m_no_sync(false), 
+                                                                                                              m_peer_info_manager(),
+                                                                                                              m_request_manager(),
+                                                                                                              m_tx_requests_runner(),
+                                                                                                              m_tx_request_handler(m_request_manager, m_tx_requests_runner)
   {
     if(!m_p2p)
       m_p2p = &m_p2p_stub;
@@ -209,49 +212,57 @@ namespace cryptonote
 
     m_block_download_max_size = command_line::get_arg(vm, cryptonote::arg_block_download_max_size);
     m_sync_pruned_blocks = command_line::get_arg(vm, cryptonote::arg_sync_pruned_blocks);
-    m_request_deadline = command_line::get_arg(vm, cryptonote::arg_request_deadline);
+    size_t request_deadline = command_line::get_arg(vm, cryptonote::arg_request_deadline);
 
-    if (m_request_deadline < 1 || m_request_deadline > 3600)
+    if (request_deadline < 1 || request_deadline > 3600)
     {
       MERROR("Request interval must be between 1 and 3600 seconds");
       MERROR("Setting to default of 30 seconds");
-      m_request_deadline = 30;
+      request_deadline = 30;
     }
 
-    std::function<void(const crypto::hash&, TxRequestQueue&, const std::time_t)> check_each_request = [&] (const crypto::hash &tx_hash, TxRequestQueue &tx_request_queue, const std::time_t request_deadline) {
-    std::time_t now = std::time(nullptr);
-    if ((now - tx_request_queue.get_request_time()) > request_deadline)
+    m_tx_request_handler.update_request_deadline(request_deadline);
+
+    m_tx_requests_runner =
+    [&] (const crypto::hash &tx_hash, TxRequestQueue &tx_request_queue, const std::time_t request_deadline)
     {
-      MCINFO("net.p2p.msg", "Timeout for "
-              << tx_hash << ", requesting it again, it has been "
-              << (now - tx_request_queue.get_request_time()) << " seconds");
-      const boost::uuids::uuid peer_id = tx_request_queue.request_from_next_peer(now);
-      if (peer_id.is_nil())
+      std::time_t now = std::time(nullptr);
+      if ((now - tx_request_queue.get_request_time()) > request_deadline)
       {
-        MCINFO("net.p2p.msg", "No peers to request from for tx " << tx_hash);
-        return;
+        MCINFO("net.p2p.msg", "Timeout for "
+                << tx_hash << ", requesting it again, it has been "
+                << (now - tx_request_queue.get_request_time()) << " seconds");
+        auto current_request_peer_id = tx_request_queue.get_current_request_peer_id();
+        if (!current_request_peer_id.is_nil()
+            && this->m_peer_info_manager.missed_announced_tx(current_request_peer_id, tx_hash))
+        {
+          MCINFO("net.p2p.msg", "Missed tx announcement more that threshold of the time, dropping peer : " << epee::string_tools::pod_to_hex(current_request_peer_id.data));
+          drop_connection(current_request_peer_id);
+        }
+        else
+        {
+          MCINFO("net.p2p.msg", "Missed tx announcement less than threshold of the time, not dropping peer : " << epee::string_tools::pod_to_hex(current_request_peer_id.data));
+        }
+        const boost::uuids::uuid peer_id = tx_request_queue.request_from_next_peer(now);
+        if (peer_id.is_nil())
+        {
+          MCINFO("net.p2p.msg", "No peers to request from for tx " << tx_hash);
+          return;
+        }
+        bool result = m_p2p->for_connection(peer_id, [&](cryptonote_connection_context &context, nodetool::peerid_type peer_id, uint32_t) -> bool {
+            MCINFO("net.p2p.msg", "Requesting tx " << tx_hash << " from peer " << epee::string_tools::to_string_hex(context.m_pruning_seed));
+            NOTIFY_REQUEST_TX_POOL_TXS::request req;
+            req.txs = {tx_hash};
+            post_notify<NOTIFY_REQUEST_TX_POOL_TXS>(req, context);
+            MCINFO("net.p2p.msg", "Requested " << req.txs.size() << " missing transactions via RequestTxPoolTxs");
+            return true;
+          });
+        if (!result)
+          MCINFO("net.p2p.msg", "Connection has been closed, not requesting tx " << tx_hash);
       }
-      bool result = m_p2p->for_connection(peer_id, [&](cryptonote_connection_context &context, nodetool::peerid_type peer_id, uint32_t) -> bool {
-          MCINFO("net.p2p.msg", "Requesting tx " << tx_hash << " from peer " << epee::string_tools::to_string_hex(context.m_pruning_seed));
-          NOTIFY_REQUEST_TX_POOL_TXS::request req;
-          req.txs = {tx_hash};
-          post_notify<NOTIFY_REQUEST_TX_POOL_TXS>(req, context);
-          MCINFO("net.p2p.msg", "Requested " << req.txs.size() << " missing transactions via RequestTxPoolTxs");
-          return true;
-        });
-      if (!result)
-        MCINFO("net.p2p.msg", "Connection has been closed, not requesting tx " << tx_hash);
-    }
-  };
+    };
 
-    // Start a thread that periodically checks for stale requested transactions.
-    m_tx_check_thread = std::thread([this, &check_each_request] () {
-      while (!m_stop_tx_check.load())
-      {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        m_request_manager.for_each_request(check_each_request, m_request_deadline);
-      }
-    });
+    m_tx_request_handler.start();
 
     return true;
   }
@@ -259,9 +270,7 @@ namespace cryptonote
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::deinit()
   {
-    m_stop_tx_check.store(true);
-    if (m_tx_check_thread.joinable())
-      m_tx_check_thread.join();
+    m_tx_request_handler.deinit();
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -948,7 +957,7 @@ namespace cryptonote
       }
 
       bool need_request = m_request_manager.add_transaction(tx_hash, context.m_connection_id, now);
-      m_peer_info_manager.add_announcement(context.m_connection_id);
+      m_peer_info_manager.add_announcement(context.m_connection_id, tx_hash);
       if (need_request) {
         m_peer_info_manager.add_requested_from_peer(context.m_connection_id);
         missing_tx_hashes.push_back(tx_hash);

@@ -36,6 +36,7 @@
 
 #include <boost/program_options/variables_map.hpp>
 #include <string>
+#include <thread>
 
 #include "byte_slice.h"
 #include "math_helper.h"
@@ -51,6 +52,7 @@
 #include "p2p/net_node_common.h"
 #include "peerinfo_manager.h"
 #include "request_manager.h"
+#include "txrequesthandler.h"
 #include <boost/circular_buffer.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/nil_generator.hpp>
@@ -202,11 +204,8 @@ namespace cryptonote
 
     PeerInfoManager m_peer_info_manager;
     RequestManager m_request_manager;
-
-    // Thread for checking the transaction requests
-    std::thread m_tx_check_thread;
-    std::atomic<bool> m_stop_tx_check{false};
-    std::time_t m_request_deadline;
+    TxRequestHandler m_tx_request_handler;
+    TxRequestHandler::TxRequestsHandlerRunner m_tx_requests_runner;
 
     // Values for sync time estimates
     boost::posix_time::ptime m_sync_start_time;

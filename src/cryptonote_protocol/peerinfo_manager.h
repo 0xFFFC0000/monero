@@ -45,9 +45,13 @@
 #include <string>
 #include <unordered_set>
 
+#include "crypto/hash.h"
+#include "misc_log_ex.h"
 #include "string_tools.h"
 
 class PeerInfoManager {
+
+  constexpr static size_t FAILURE_THRESHOLD_PERCENTAGE = 70;
 
 public:
   class PeerInfo {
@@ -57,26 +61,27 @@ public:
 
   private:
     boost::uuids::uuid m_connection_id;
-    size_t m_announcement = 0;
+    std::unordered_set<crypto::hash> m_announcements;
     size_t m_received = 0;
     size_t m_requested_from_me = 0;
     size_t m_requested_from_peer = 0;
     size_t m_sent = 0;
+    size_t m_missed = 0;
     mutable RWLock lock;
 
   public:
     PeerInfo(const boost::uuids::uuid &id)
-        : m_connection_id(id), m_announcement(0), m_received(0),
-          m_requested_from_me(0), m_requested_from_peer(0), m_sent(0), lock() {}
+        : m_connection_id(id), m_announcements(0), m_received(0),
+          m_requested_from_me(0), m_requested_from_peer(0), m_sent(0),
+          m_missed(0), lock() {}
 
     PeerInfo(PeerInfo &&other) noexcept
-        : m_connection_id(
-              other.m_connection_id),
-          m_announcement(other.m_announcement), m_received(other.m_received),
+        : m_connection_id(other.m_connection_id),
+          m_announcements(other.m_announcements), m_received(other.m_received),
           m_requested_from_me(other.m_requested_from_me),
           m_requested_from_peer(other.m_requested_from_peer),
-          m_sent(other.m_sent) {
-      // The lock is not moved. Each moved-to object gets its own 
+          m_sent(other.m_sent), m_missed(other.m_missed) {
+      // The lock is not moved. Each moved-to object gets its own
     }
 
     struct Hash {
@@ -103,15 +108,15 @@ public:
 
     void reset() {
       WriteLock w_lock(lock);
-      m_announcement = 0;
+      m_announcements.clear();
       m_received = 0;
       m_requested_from_me = 0;
       m_sent = 0;
     }
 
-    void add_announcement() {
+    void add_announcement(const crypto::hash &tx_hash) {
       WriteLock w_lock(lock);
-      ++m_announcement;
+      m_announcements.insert(tx_hash);
     }
 
     void add_received() {
@@ -134,9 +139,14 @@ public:
       ++m_sent;
     }
 
-    size_t get_announcement() const {
+    void add_missed() {
+      WriteLock w_lock(lock);
+      ++m_missed;
+    }
+
+    size_t get_announcement_size() const {
       ReadLock r_lock(lock);
-      return m_announcement;
+      return m_announcements.size();
     }
 
     size_t get_received() const {
@@ -165,8 +175,13 @@ public:
 
     size_t get_total() const {
       ReadLock r_lock(lock);
-      return m_announcement + m_received + m_requested_from_me +
+      return m_announcements.size() + m_received + m_requested_from_me +
              m_requested_from_peer + m_sent;
+    }
+
+    size_t get_missed() const {
+      ReadLock r_lock(lock);
+      return m_missed;
     }
 
     std::string get_info() const {
@@ -174,11 +189,11 @@ public:
 
       std::ostringstream oss;
       oss << "Peer ID: " << epee::string_tools::pod_to_hex(m_connection_id)
-          << ", Announcements: " << m_announcement
+          << ", Announcements size: " << m_announcements.size()
           << ", Received: " << m_received
           << ", Requested from me : " << m_requested_from_me
           << ", Requested from peer: " << m_requested_from_peer
-          << ", Sent: " << m_sent;
+          << ", Sent: " << m_sent << ", Missed: " << m_missed;
       return oss.str();
     }
   };
@@ -231,15 +246,16 @@ public:
     }
   }
 
-  void add_announcement(const boost::uuids::uuid &id) {
+  void add_announcement(const boost::uuids::uuid &id,
+                        const crypto::hash &tx_hash) {
     auto it = std::find_if(
         m_peer_info.begin(), m_peer_info.end(),
         [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
     if (it != m_peer_info.end()) {
-      const_cast<PeerInfo &>(*it).add_announcement();
+      const_cast<PeerInfo &>(*it).add_announcement(tx_hash);
     } else {
       PeerInfo new_peer(id);
-      new_peer.add_announcement();
+      new_peer.add_announcement(tx_hash);
       m_peer_info.emplace(std::move(new_peer));
     }
   }
@@ -301,7 +317,7 @@ public:
         m_peer_info.begin(), m_peer_info.end(),
         [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
     if (it != m_peer_info.end()) {
-      return it->get_announcement();
+      return it->get_announcement_size();
     }
     return 0;
   }
@@ -354,6 +370,25 @@ public:
       return it->get_total();
     }
     return 0;
+  }
+
+  bool missed_announced_tx(const boost::uuids::uuid &id,
+                           const crypto::hash &tx_hash) {
+    auto it = std::find_if(
+        m_peer_info.begin(), m_peer_info.end(),
+        [&id](const PeerInfo &peer) { return peer.get_connection_id() == id; });
+    if (it != m_peer_info.end()) {
+      const_cast<PeerInfo &>(*it).add_missed();
+      // FAILURE_THRESHOLD_PERCENTAGE% of the announcements are missed
+      return (it->get_missed() * 100 / it->get_announcement_size()) >
+             FAILURE_THRESHOLD_PERCENTAGE;
+    } else {
+      MWARNING("Peer not found: " << epee::string_tools::pod_to_hex(id)
+                                  << ", tx: "
+                                  << epee::string_tools::pod_to_hex(tx_hash)
+                                  << ", cannot check missed announcements");
+    }
+    return false;
   }
 };
 

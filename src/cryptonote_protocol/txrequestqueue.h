@@ -30,7 +30,6 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-//
 
 #ifndef CRYPTONOTE_PROTOCOL_TXREQUESTQUEUE_H
 #define CRYPTONOTE_PROTOCOL_TXREQUESTQUEUE_H
@@ -185,6 +184,16 @@ public:
     MINFO("No peers available to request from");
     return boost::uuids::nil_uuid();
   }
+
+  boost::uuids::uuid get_current_request_peer_id() const {
+    MINFO("Getting current request peer ID");
+    ReadLock r_lock(lock);
+    if (!request_queue.empty()) {
+      return request_queue.begin()->get_connection_id();
+    }
+    return boost::uuids::nil_uuid();
+  }
+
 };
 
 #endif // CRYPTONOTE_PROTOCOL_TXREQUESTQUEUE_H
