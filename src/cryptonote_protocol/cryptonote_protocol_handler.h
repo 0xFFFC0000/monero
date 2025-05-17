@@ -100,9 +100,10 @@ namespace cryptonote
       HANDLE_NOTIFY_T2(NOTIFY_REQUEST_CHAIN, &cryptonote_protocol_handler::handle_request_chain)
       HANDLE_NOTIFY_T2(NOTIFY_RESPONSE_CHAIN_ENTRY, &cryptonote_protocol_handler::handle_response_chain_entry)
       HANDLE_NOTIFY_T2(NOTIFY_NEW_FLUFFY_BLOCK, &cryptonote_protocol_handler::handle_notify_new_fluffy_block)			
-      HANDLE_NOTIFY_T2(NOTIFY_REQUEST_FLUFFY_MISSING_TX, &cryptonote_protocol_handler::handle_request_fluffy_missing_tx)						
-      HANDLE_NOTIFY_T2(NOTIFY_TX_POOL_INV, &cryptonote_protocol_handler::handle_notify_tx_pool_inv);
-      HANDLE_NOTIFY_T2(NOTIFY_REQUEST_TX_POOL_TXS, &cryptonote_protocol_handler::handle_request_tx_pool_txs);
+      HANDLE_NOTIFY_T2(NOTIFY_REQUEST_FLUFFY_MISSING_TX, &cryptonote_protocol_handler::handle_request_fluffy_missing_tx)
+      HANDLE_NOTIFY_T2(NOTIFY_GET_TXPOOL_COMPLEMENT, &cryptonote_protocol_handler::handle_notify_get_txpool_complement)
+      HANDLE_NOTIFY_T2(NOTIFY_TX_POOL_INV, &cryptonote_protocol_handler::handle_notify_tx_pool_inv)
+      HANDLE_NOTIFY_T2(NOTIFY_REQUEST_TX_POOL_TXS, &cryptonote_protocol_handler::handle_request_tx_pool_txs)
     END_INVOKE_MAP2()
 
     bool on_idle();
