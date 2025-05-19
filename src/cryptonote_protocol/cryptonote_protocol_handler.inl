@@ -2815,42 +2815,6 @@ skip:
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::relay_transactions(NOTIFY_NEW_TRANSACTIONS::request& arg, const boost::uuids::uuid& source, epee::net_utils::zone zone, relay_method tx_relay)
   {
-    MCINFO("net.p2p.msg", "relay_transaction : hash=" << arg.txs.size() << " txs");
-    if (relay_method::fluff == tx_relay) {
-      std::vector<std::reference_wrapper<cryptonote::cryptonote_connection_context> > fluffyConnections;
-      m_p2p->for_each_connection([&](connection_context& context, nodetool::peerid_type peer_id, uint32_t support_flags)
-      {
-        // peer_id also filters out connections before handshake
-        if (peer_id && source != context.m_connection_id
-            && support_flags & P2P_SUPPORT_FLAG_V2
-            && context.m_remote_address.get_zone() == epee::net_utils::zone::public_)
-        {
-          LOG_DEBUG_CC(context, "Adding " << context.m_connection_id << " to list of connections to announce to.");
-          fluffyConnections.push_back(std::ref(context));
-        }
-        return true;
-      });
-
-      if (!fluffyConnections.empty())
-      {
-        for (const auto& fluffyConnection : fluffyConnections)
-        {
-          NOTIFY_TX_POOL_INV::request notify_tx_pool_inv = {};
-          for (const blobdata& tx_blob : arg.txs)
-          {
-            transaction tx = {};
-            crypto::hash tx_hash = crypto::null_hash;
-            cryptonote::parse_and_validate_tx_from_blob(tx_blob, tx, tx_hash);
-            MCINFO("net.p2p.msg", "-->>NOTIFY_TX_POOL_INV: hash=" << tx_hash);
-            notify_tx_pool_inv.txs.push_back(tx_hash);
-          }
-          post_notify<NOTIFY_TX_POOL_INV>(notify_tx_pool_inv, fluffyConnection.get());
-          MCINFO("net.p2p.msg", "-->>NOTIFY_TX_POOL_INV: hashes.size()=" << notify_tx_pool_inv.txs.size() << " to " << fluffyConnection.get().m_connection_id);
-        }
-        return true;
-      }
-    }
-
     /* Push all outgoing transactions to this function. The behavior needs to
        identify how the transaction is going to be relayed, and then update the
        local mempool before doing the relay. The code was already updating the
