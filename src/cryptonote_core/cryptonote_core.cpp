@@ -131,7 +131,7 @@ namespace cryptonote
   const command_line::arg_descriptor<size_t> arg_request_deadline  = {
     "request-deadline"
   , "Set the deadline for waiting requested transactions (in seconds)"
-  , 30
+  , P2P_DEFAULT_REQUEST_TIMEOUT
   };
 
   static const command_line::arg_descriptor<bool> arg_test_drop_download = {

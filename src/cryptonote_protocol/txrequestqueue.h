@@ -38,12 +38,11 @@
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
-#include <mutex>
 #include <set>
-#include <shared_mutex>
 
 #include "misc_log_ex.h"
 #include "string_tools.h"
+#include "syncobj.h"
 
 /**
  * \brief A queue of requests. The front of the queue shows the current request.
@@ -53,9 +52,6 @@
  * to add a new peer and to retrieve the next peer that hasn't been requested.
  */
 class tx_request_queue {
-  using rw_lock = std::shared_timed_mutex;
-  using read_lock = std::shared_lock<rw_lock>;
-  using write_lock = std::unique_lock<rw_lock>;
 
 private:
   /**
@@ -108,13 +104,17 @@ private:
     void set_request_time(std::time_t time) { request_time = time; }
   };
 
-  mutable rw_lock m_lock;
+  mutable epee::rw_mutex m_mutex;
   std::set<tx_request, tx_request::order> request_queue;
 
-  tx_request_queue &operator=(const tx_request_queue &other) = delete;
+  // delete copy, assignment, move constructors and operators
   tx_request_queue(const tx_request_queue &other) = delete;
+  tx_request_queue &operator=(const tx_request_queue &other) = delete;
+  tx_request_queue(tx_request_queue &&other) = delete;
+  tx_request_queue &operator=(tx_request_queue &&other) = delete;
   bool operator>(const tx_request_queue &other) const = delete;
   bool operator<(const tx_request_queue &other) const = delete;
+
 
 public:
   // Constructor that takes the first peer
@@ -122,18 +122,10 @@ public:
     MINFO("Creating request queue with ID: "
           << epee::string_tools::pod_to_hex(id)
           << ", first seen: " << first_seen);
-    write_lock w_lock(m_lock);
+    epee::write_lock w_lock(m_mutex);
     tx_request request(id, first_seen);
     request.submit_request(first_seen);
     request_queue.emplace(std::move(request));
-  }
-
-  tx_request_queue(tx_request_queue &&other) noexcept
-      : request_queue(std::move(other.request_queue)) {
-    // No need to lock the mutex here, as the other object is being moved
-    // and will not be used anymore.
-    // The mutex is not moved, so it will be destructed when the other
-    // object goes out of scope.
   }
 
   // Add a peer to the queue; updates request_time if it was requested
@@ -141,7 +133,7 @@ public:
     MINFO("Adding " << epee::string_tools::pod_to_hex(id)
                     << " to request queue "
                     << epee::string_tools::pod_to_hex(first_seen));
-    write_lock w_lock(m_lock);
+    epee::write_lock w_lock(m_mutex);
     tx_request request(id, first_seen);
     // only add if it is not already in the queue
     if (request_queue.find(request) == request_queue.end()) {
@@ -151,7 +143,7 @@ public:
 
   std::time_t get_request_time() const {
     MINFO("Getting request time");
-    read_lock r_lock(m_lock);
+    epee::read_lock r_lock(m_mutex);
     if (!request_queue.empty()) {
       MINFO("Connection ID: " << epee::string_tools::pod_to_hex(
                                      request_queue.begin()->get_connection_id())
@@ -166,7 +158,7 @@ public:
   // If the front has already been requested and we consider it failed, pop it.
   boost::uuids::uuid request_from_next_peer(std::time_t now) {
     MINFO("Requesting from next peer");
-    write_lock w_lock(m_lock);
+    epee::write_lock w_lock(m_mutex);
     while (!request_queue.empty()) {
       // Get the front of the queue, and strip constness
       // Since we don't modify data which would change the order
@@ -187,7 +179,7 @@ public:
 
   boost::uuids::uuid get_current_request_peer_id() const {
     MINFO("Getting current request peer ID");
-    read_lock r_lock(m_lock);
+    epee::read_lock r_lock(m_mutex);
     if (!request_queue.empty()) {
       return request_queue.begin()->get_connection_id();
     }

@@ -30,7 +30,6 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-//
 
 #ifndef CRYPTONOTE_PROTOCOL_PEERINFO_MANAGER_H
 #define CRYPTONOTE_PROTOCOL_PEERINFO_MANAGER_H
@@ -40,49 +39,52 @@
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <shared_mutex>
 #include <sstream>
 #include <string>
 #include <unordered_set>
 
 #include "crypto/hash.h"
+#include "cryptonote_config.h"
 #include "misc_log_ex.h"
 #include "string_tools.h"
+#include "syncobj.h"
 
 class peer_info_manager {
 
-  constexpr static size_t FAILURE_THRESHOLD_PERCENTAGE = 70;
-
 public:
   class peer_info {
-    using rw_lock = std::shared_timed_mutex;
-    using read_lock = std::shared_lock<rw_lock>;
-    using write_lock = std::unique_lock<rw_lock>;
 
   private:
-    boost::uuids::uuid m_connection_id;
-    std::unordered_set<crypto::hash> m_announcements;
-    size_t m_received = 0;
-    size_t m_requested_from_me = 0;
-    size_t m_requested_from_peer = 0;
-    size_t m_sent = 0;
-    size_t m_missed = 0;
-    mutable rw_lock m_lock;
+    struct peer_info_state {
+      boost::uuids::uuid connection_id;
+      std::unordered_set<crypto::hash> announcements;
+      size_t received = 0;
+      size_t requested_from_me = 0;
+      size_t requested_from_peer = 0;
+      size_t sent = 0;
+      size_t missed = 0;
+      mutable epee::rw_mutex m_mutex;
+
+      // delete moving, copying, and assignment
+      peer_info_state() = default;
+      peer_info_state(const peer_info_state &) = delete;
+      peer_info_state(peer_info_state &&) = delete;
+      peer_info_state &operator=(const peer_info_state &) = delete;
+      peer_info_state &operator=(peer_info_state &&) = delete;
+      ~peer_info_state() = default;
+      peer_info_state(const boost::uuids::uuid &id)
+          : connection_id(id), received(0), requested_from_me(0),
+            requested_from_peer(0), sent(0), missed(0) {}
+    };
+
+    std::shared_ptr<peer_info_state> m_data;
 
   public:
     peer_info(const boost::uuids::uuid &id)
-        : m_connection_id(id), m_announcements(0), m_received(0),
-          m_requested_from_me(0), m_requested_from_peer(0), m_sent(0),
-          m_missed(0), m_lock() {}
+        : m_data(std::make_shared<peer_info_state>(id)) {}
 
-    peer_info(peer_info &&other) noexcept
-        : m_connection_id(other.m_connection_id),
-          m_announcements(other.m_announcements), m_received(other.m_received),
-          m_requested_from_me(other.m_requested_from_me),
-          m_requested_from_peer(other.m_requested_from_peer),
-          m_sent(other.m_sent), m_missed(other.m_missed) {
-      // The lock is not moved. Each moved-to object gets its own
-    }
+    peer_info(peer_info &&other) noexcept = default;
+    peer_info &operator=(peer_info &&other) noexcept = default;
 
     struct hash {
       std::size_t operator()(const peer_info &p) const {
@@ -97,103 +99,103 @@ public:
     bool operator<(const peer_info &other) const = delete;
 
     bool operator==(const peer_info &other) const {
-      read_lock r_lock(m_lock);
-      return m_connection_id == other.get_connection_id();
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->connection_id == other.get_connection_id();
     }
 
     bool operator!=(const peer_info &other) const {
-      read_lock r_lock(m_lock);
-      return m_connection_id != other.get_connection_id();
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->connection_id != other.get_connection_id();
     }
 
     void reset() {
-      write_lock w_lock(m_lock);
-      m_announcements.clear();
-      m_received = 0;
-      m_requested_from_me = 0;
-      m_sent = 0;
+      epee::write_lock w_lock(m_data->m_mutex);
+      m_data->announcements.clear();
+      m_data->received = 0;
+      m_data->requested_from_me = 0;
+      m_data->sent = 0;
     }
 
     void add_announcement(const crypto::hash &tx_hash) {
-      write_lock w_lock(m_lock);
-      m_announcements.insert(tx_hash);
+      epee::write_lock w_lock(m_data->m_mutex);
+      m_data->announcements.insert(tx_hash);
     }
 
     void add_received() {
-      write_lock w_lock(m_lock);
-      ++m_received;
+      epee::write_lock w_lock(m_data->m_mutex);
+      ++m_data->received;
     }
 
     void add_requested_from_me() {
-      write_lock w_lock(m_lock);
-      ++m_requested_from_me;
+      epee::write_lock w_lock(m_data->m_mutex);
+      ++m_data->requested_from_me;
     }
 
     void add_requested_from_peer() {
-      write_lock w_lock(m_lock);
-      ++m_requested_from_peer;
+      epee::write_lock w_lock(m_data->m_mutex);
+      ++m_data->requested_from_peer;
     }
 
     void add_sent() {
-      write_lock w_lock(m_lock);
-      ++m_sent;
+      epee::write_lock w_lock(m_data->m_mutex);
+      ++m_data->sent;
     }
 
     void add_missed() {
-      write_lock w_lock(m_lock);
-      ++m_missed;
+      epee::write_lock w_lock(m_data->m_mutex);
+      ++m_data->missed;
     }
 
     size_t get_announcement_size() const {
-      read_lock r_lock(m_lock);
-      return m_announcements.size();
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->announcements.size();
     }
 
     size_t get_received() const {
-      read_lock r_lock(m_lock);
-      return m_received;
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->received;
     }
 
     size_t get_requested_from_me() const {
-      read_lock r_lock(m_lock);
-      return m_requested_from_me;
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->requested_from_me;
     }
 
     size_t get_requested_from_peer() const {
-      read_lock r_lock(m_lock);
-      return m_requested_from_peer;
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->requested_from_peer;
     }
 
     size_t get_sent() const {
-      read_lock r_lock(m_lock);
-      return m_sent;
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->sent;
     }
 
     const boost::uuids::uuid &get_connection_id() const {
-      return m_connection_id;
+      return m_data->connection_id;
     }
 
     size_t get_total() const {
-      read_lock r_lock(m_lock);
-      return m_announcements.size() + m_received + m_requested_from_me +
-             m_requested_from_peer + m_sent;
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->announcements.size() + m_data->received + m_data->requested_from_me +
+             m_data->requested_from_peer + m_data->sent;
     }
 
     size_t get_missed() const {
-      read_lock r_lock(m_lock);
-      return m_missed;
+      epee::read_lock r_lock(m_data->m_mutex);
+      return m_data->missed;
     }
 
     std::string get_info() const {
-      read_lock r_lock(m_lock);
+      epee::read_lock r_lock(m_data->m_mutex);
 
       std::ostringstream oss;
-      oss << "Peer ID: " << epee::string_tools::pod_to_hex(m_connection_id)
-          << ", Announcements size: " << m_announcements.size()
-          << ", Received: " << m_received
-          << ", Requested from me : " << m_requested_from_me
-          << ", Requested from peer: " << m_requested_from_peer
-          << ", Sent: " << m_sent << ", Missed: " << m_missed;
+      oss << "Peer ID: " << epee::string_tools::pod_to_hex(m_data->connection_id)
+          << ", Announcements size: " << m_data->announcements.size()
+          << ", Received: " << m_data->received
+          << ", Requested from me : " << m_data->requested_from_me
+          << ", Requested from peer: " << m_data->requested_from_peer
+          << ", Sent: " << m_data->sent << ", Missed: " << m_data->missed;
       return oss.str();
     }
   };
@@ -394,9 +396,10 @@ public:
                            });
     if (it != m_peer_info.end()) {
       const_cast<peer_info &>(*it).add_missed();
-      // FAILURE_THRESHOLD_PERCENTAGE% of the announcements are missed
+      // P2P_REQUEST_FAILURE_THRESHOLD_PERCENTAGE% of the announcements are
+      // missed
       return (it->get_missed() * 100 / it->get_announcement_size()) >
-             FAILURE_THRESHOLD_PERCENTAGE;
+             P2P_REQUEST_FAILURE_THRESHOLD_PERCENTAGE;
     } else {
       MWARNING("Peer not found: " << epee::string_tools::pod_to_hex(id)
                                   << ", tx: "

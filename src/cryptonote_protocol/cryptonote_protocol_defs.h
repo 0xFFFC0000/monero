@@ -376,12 +376,12 @@ namespace cryptonote
     typedef epee::misc_utils::struct_init<request_t> request;
   };
 
-  /************************************************************************/
-  /* Announces new transaction hashes that
-  /* the sender believes the receiver may not have.
-  /* The receiver can pull which hashes are missing locally
-  /* and optionally request the actual serialized transactions for them.
-  /************************************************************************/
+  /************************************************************************
+  * Announces new transaction hashes that                                 *
+  * the sender believes the receiver may not have.                        *
+  * The receiver can pull which hashes are missing locally                *
+  * and optionally request the actual serialized transactions for them.   *
+  *************************************************************************/
   struct NOTIFY_TX_POOL_INV
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 11;
@@ -400,12 +400,12 @@ namespace cryptonote
     typedef epee::misc_utils::struct_init<request_t> request;
   };
 
-  /************************************************************************/
-  /* Requests the actual transaction data corresponding
-  /* to a set of transaction hashes.
-  /* The receiver should look up each transaction in its own pool
-  /* or memory and respond with the serialized version, if known.
-  /************************************************************************/
+  /************************************************************************
+  * Requests the actual transaction data corresponding                    *
+  * to a set of transaction hashes.                                       *
+  * The receiver should look up each transaction in its own pool          *
+  * or memory and respond with the serialized version, if known.          *
+  *************************************************************************/
   struct NOTIFY_REQUEST_TX_POOL_TXS
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 12;

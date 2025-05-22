@@ -218,7 +218,7 @@ namespace cryptonote
     {
       MERROR("Request interval must be between 1 and 3600 seconds");
       MERROR("Setting to default of 30 seconds");
-      request_deadline = 30;
+      request_deadline = P2P_DEFAULT_REQUEST_TIMEOUT;
     }
 
     m_tx_request_handler.update_request_deadline(request_deadline);

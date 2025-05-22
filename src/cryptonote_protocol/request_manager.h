@@ -30,44 +30,43 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-//
 
 #ifndef CRYPTONOTE_PROTOCOL_REQUEST_MANAGER_H
 #define CRYPTONOTE_PROTOCOL_REQUEST_MANAGER_H
 
 #include "crypto/hash.h"
 #include "string_tools.h"
+#include "syncobj.h"
 #include "txrequestqueue.h"
+
 #include <boost/functional/hash.hpp>
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <mutex>
-#include <shared_mutex>
 #include <unordered_map>
 
 class request_manager {
 
-  using rw_lock = std::shared_timed_mutex;
-  using read_lock = std::shared_lock<rw_lock>;
-  using write_lock = std::unique_lock<rw_lock>;
-
 private:
   // Track requested transactions
-  std::unordered_map<crypto::hash, tx_request_queue> m_requested_txs;
-  mutable rw_lock m_lock;
+  std::unordered_map<crypto::hash, std::unique_ptr<tx_request_queue>>
+      m_requested_txs;
+  mutable epee::rw_mutex m_mutex;
 
-  request_manager &operator=(const request_manager &other) = delete;
+  // delete copy, assignment, move constructors and operators
   request_manager(const request_manager &other) = delete;
+  request_manager &operator=(const request_manager &other) = delete;
+  request_manager(request_manager &&other) = delete;
+  request_manager &operator=(request_manager &&other) = delete;
   bool operator>(const request_manager &other) const = delete;
   bool operator<(const request_manager &other) const = delete;
 
 public:
-  request_manager() : m_requested_txs(), m_lock() {}
+  request_manager() : m_requested_txs(), m_mutex() {}
 
   bool remove_transaction(const crypto::hash &tx_hash) {
     MINFO("Removing transaction: " << epee::string_tools::pod_to_hex(tx_hash));
-    write_lock w_lock(m_lock);
+    epee::write_lock w_lock(m_mutex);
     auto it = m_requested_txs.find(tx_hash);
     if (it != m_requested_txs.end()) {
       m_requested_txs.erase(it);
@@ -77,7 +76,7 @@ public:
   }
 
   bool already_requested_tx(const crypto::hash &tx_hash) const {
-    read_lock r_lock(m_lock);
+    epee::read_lock r_lock(m_mutex);
     return m_requested_txs.find(tx_hash) != m_requested_txs.end();
   }
 
@@ -87,8 +86,9 @@ public:
           << epee::string_tools::pod_to_hex(tx_hash)
           << ", from peer: " << epee::string_tools::pod_to_hex(id)
           << ", first seen: " << first_seen);
-    write_lock w_lock(m_lock);
-    m_requested_txs.emplace(tx_hash, tx_request_queue(id, first_seen));
+    epee::write_lock w_lock(m_mutex);
+    m_requested_txs.emplace(tx_hash,
+                            std::make_unique<tx_request_queue>(id, first_seen));
   }
 
   void add_peer(const crypto::hash &tx_hash, const boost::uuids::uuid &id,
@@ -97,10 +97,10 @@ public:
                           << " to transaction: "
                           << epee::string_tools::pod_to_hex(tx_hash)
                           << ", first seen: " << first_seen);
-    write_lock w_lock(m_lock);
+    epee::write_lock w_lock(m_mutex);
     auto it = m_requested_txs.find(tx_hash);
     if (it != m_requested_txs.end()) {
-      it->second.add_peer(id, first_seen);
+      it->second->add_peer(id, first_seen);
     }
   }
 
@@ -128,9 +128,9 @@ public:
                    const std::time_t m_request_deadline) {
     MINFO("Iterating over requested transactions for deadline: "
           << m_request_deadline);
-    read_lock r_lock(m_lock);
+    epee::read_lock r_lock(m_mutex);
     for (auto &pair : m_requested_txs) {
-      f(pair.first, pair.second, m_request_deadline);
+      f(pair.first, *pair.second, m_request_deadline);
     }
   }
 };
