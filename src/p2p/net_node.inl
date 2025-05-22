@@ -175,6 +175,17 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::is_remote_host_allowed(const epee::net_utils::network_address &address, time_t *t)
   {
+    if (address.is_local() &&
+        (address.get_type_id() ==
+             epee::net_utils::ipv4_network_address::get_type_id() ||
+         address.get_type_id() ==
+             epee::net_utils::ipv6_network_address::get_type_id())) {
+      MWARNING("Address is local "
+               << address.host_str()
+               << " and on same machine, local IPs are allowed.");
+      return true;
+    }
+
     CRITICAL_REGION_LOCAL(m_blocked_hosts_lock);
 
     const time_t now = time(nullptr);
@@ -1467,7 +1478,7 @@ namespace nodetool
     ape.first_seen = first_seen_stamp ? first_seen_stamp : time(nullptr);
 
     zone.m_peerlist.append_with_peer_anchor(ape);
-    zone.m_notifier.on_handshake_complete(con->m_connection_id, con->m_is_income);
+    zone.m_notifier.on_handshake_complete(con->m_connection_id, con->m_is_income, (con->support_flags & P2P_SUPPORT_FLAG_V2));
     zone.m_notifier.new_out_connection();
 
     LOG_DEBUG_CC(*con, "CONNECTION HANDSHAKED OK.");
@@ -2583,7 +2594,7 @@ namespace nodetool
       return 1;
     }
 
-    zone.m_notifier.on_handshake_complete(context.m_connection_id, context.m_is_income);
+    zone.m_notifier.on_handshake_complete(context.m_connection_id, context.m_is_income, (arg.node_data.support_flags & P2P_SUPPORT_FLAG_V2));
 
     //associate peer_id with this connection
     context.peer_id = arg.node_data.peer_id;
