@@ -62,7 +62,7 @@ public:
   request_manager() : m_requested_txs(), m_mutex() {}
 
   bool remove_transaction(const crypto::hash &tx_hash) {
-    MINFO("Removing transaction: " << epee::string_tools::pod_to_hex(tx_hash));
+    MWARNING("Removing transaction: " << epee::string_tools::pod_to_hex(tx_hash));
     epee::write_lock w_lock(m_mutex);
     auto it = m_requested_txs.find(tx_hash);
     if (it != m_requested_txs.end()) {
@@ -79,7 +79,7 @@ public:
 
   void initial_add(const crypto::hash &tx_hash, const boost::uuids::uuid &id,
                    std::time_t first_seen) {
-    MINFO("Initial add of transaction: "
+    MWARNING("Initial add of transaction: "
           << epee::string_tools::pod_to_hex(tx_hash)
           << ", from peer: " << epee::string_tools::pod_to_hex(id)
           << ", first seen: " << first_seen);
@@ -90,7 +90,7 @@ public:
 
   void add_peer(const crypto::hash &tx_hash, const boost::uuids::uuid &id,
                 std::time_t first_seen) {
-    MINFO("Adding peer: " << epee::string_tools::pod_to_hex(id)
+    MWARNING("Adding peer: " << epee::string_tools::pod_to_hex(id)
                           << " to transaction: "
                           << epee::string_tools::pod_to_hex(tx_hash)
                           << ", first seen: " << first_seen);
@@ -103,7 +103,7 @@ public:
 
   bool add_transaction(const crypto::hash &tx_hash,
                        const boost::uuids::uuid &id, std::time_t first_seen) {
-    MINFO("Adding transaction: " << epee::string_tools::pod_to_hex(tx_hash)
+    MWARNING("Adding transaction: " << epee::string_tools::pod_to_hex(tx_hash)
                                  << ", from peer: "
                                  << epee::string_tools::pod_to_hex(id)
                                  << ", first seen: " << first_seen);
@@ -122,12 +122,11 @@ public:
   for_each_request(std::function<void(const crypto::hash &tx_hash,
                                       tx_request_queue &request_queue,
                                       const std::time_t request_deadline)> &f,
-                   const std::time_t m_request_deadline) {
-    MINFO("Iterating over requested transactions for deadline: "
-          << m_request_deadline);
+                                      const std::time_t request_deadline) {
+    MWARNING("Iterating over requested transactions");
     epee::read_lock r_lock(m_mutex);
     for (auto &pair : m_requested_txs) {
-      f(pair.first, *pair.second, m_request_deadline);
+      f(pair.first, *pair.second, request_deadline);
     }
   }
 };

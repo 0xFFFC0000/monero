@@ -114,7 +114,7 @@ private:
 public:
   // Constructor that takes the first peer
   tx_request_queue(const boost::uuids::uuid &id, std::time_t first_seen) {
-    MINFO("Creating request queue with ID: "
+    MWARNING("Creating request queue with ID: "
           << epee::string_tools::pod_to_hex(id)
           << ", first seen: " << first_seen);
     epee::write_lock w_lock(m_mutex);
@@ -125,7 +125,7 @@ public:
 
   // Add a peer to the queue; updates request_time if it was requested
   void add_peer(const boost::uuids::uuid &id, std::time_t first_seen) {
-    MINFO("Adding " << epee::string_tools::pod_to_hex(id)
+    MWARNING("Adding " << epee::string_tools::pod_to_hex(id)
                     << " to request queue "
                     << epee::string_tools::pod_to_hex(first_seen));
     epee::write_lock w_lock(m_mutex);
@@ -137,10 +137,10 @@ public:
   }
 
   std::time_t get_request_time() const {
-    MINFO("Getting request time");
+    MWARNING("Getting request time");
     epee::read_lock r_lock(m_mutex);
     if (!request_queue.empty()) {
-      MINFO("Connection ID: " << epee::string_tools::pod_to_hex(
+      MWARNING("Connection ID: " << epee::string_tools::pod_to_hex(
                                      request_queue.begin()->get_connection_id())
                               << ", request time: "
                               << request_queue.begin()->get_request_time());
@@ -152,7 +152,7 @@ public:
   // Get the next peer that we haven’t requested from yet.
   // If the front has already been requested and we consider it failed, pop it.
   boost::uuids::uuid request_from_next_peer(std::time_t now) {
-    MINFO("Requesting from next peer");
+    MWARNING("Requesting from next peer");
     epee::write_lock w_lock(m_mutex);
     while (!request_queue.empty()) {
       // Get the front of the queue, and strip constness
@@ -161,19 +161,19 @@ public:
       if (!front.is_request_submitted()) // not requested yet
       {
         front.submit_request(now);
-        MINFO("Requesting from peer: "
+        MWARNING("Requesting from peer: "
               << epee::string_tools::pod_to_hex(front.get_connection_id()));
         return front.get_connection_id();
       }
       // already requested and considered stale, pop first
       request_queue.erase(request_queue.begin());
     }
-    MINFO("No peers available to request from");
+    MWARNING("No peers available to request from");
     return boost::uuids::nil_uuid();
   }
 
   boost::uuids::uuid get_current_request_peer_id() const {
-    MINFO("Getting current request peer ID");
+    MWARNING("Getting current request peer ID");
     epee::read_lock r_lock(m_mutex);
     if (!request_queue.empty()) {
       return request_queue.begin()->get_connection_id();
