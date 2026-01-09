@@ -1210,6 +1210,7 @@ TEST(node_server, race_condition)
     });
     conn.reset();
     work.reset();
+    io_context.stop();
     for (auto& w: workers) {
       w.join();
     }
