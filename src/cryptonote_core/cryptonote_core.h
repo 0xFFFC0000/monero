@@ -69,6 +69,7 @@ namespace cryptonote
   extern const command_line::arg_descriptor<difficulty_type> arg_fixed_difficulty;
   extern const command_line::arg_descriptor<bool> arg_offline;
   extern const command_line::arg_descriptor<size_t> arg_block_download_max_size;
+  extern const command_line::arg_descriptor<size_t> arg_span_limit;
   extern const command_line::arg_descriptor<bool> arg_sync_pruned_blocks;
 
   /************************************************************************/
@@ -580,7 +581,7 @@ namespace cryptonote
       *
       * @note see Blockchain::get_short_chain_history
       */
-     bool get_short_chain_history(std::list<crypto::hash>& ids) const;
+     bool get_short_chain_history(std::list<crypto::hash>& ids, uint64_t& current_height) const;
 
      /**
       * @copydoc Blockchain::find_blockchain_supplement(const std::list<crypto::hash>&, NOTIFY_RESPONSE_CHAIN_ENTRY::request&) const

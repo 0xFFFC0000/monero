@@ -124,6 +124,11 @@ namespace cryptonote
   , "Set maximum size of block download queue in bytes (0 for default)"
   , 0
   };
+  const command_line::arg_descriptor<size_t> arg_span_limit  = {
+    "span-limit"
+  , "Defines how many minutes of block synchronization data to request at a time (default is 2 minutes)"
+  , 2
+  };
   const command_line::arg_descriptor<bool> arg_sync_pruned_blocks  = {
     "sync-pruned-blocks"
   , "Allow syncing from nodes with only pruned blocks"
@@ -333,6 +338,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_offline);
     command_line::add_arg(desc, arg_disable_dns_checkpoints);
     command_line::add_arg(desc, arg_block_download_max_size);
+    command_line::add_arg(desc, arg_span_limit);
     command_line::add_arg(desc, arg_sync_pruned_blocks);
     command_line::add_arg(desc, arg_max_txpool_weight);
     command_line::add_arg(desc, arg_block_notify);
@@ -451,6 +457,9 @@ namespace cryptonote
   bool core::init(const boost::program_options::variables_map& vm, const cryptonote::test_options *test_options, const GetCheckpointsCallback& get_checkpoints/* = nullptr */, bool allow_dns)
   {
     start_time = std::time(nullptr);
+
+    // Necessary for FCMP++ sync on Linux platforms, especially with limited memory
+    rct::limitMaxMemArenas();
 
     const bool regtest = command_line::get_arg(vm, arg_regtest_on);
     if (test_options != NULL || regtest)
@@ -955,11 +964,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::are_key_images_spent(const std::vector<crypto::key_image>& key_im, std::vector<bool> &spent) const
   {
-    spent.clear();
-    for(auto& ki: key_im)
-    {
-      spent.push_back(m_blockchain_storage.have_tx_keyimg_as_spent(ki));
-    }
+    spent = m_blockchain_storage.have_tx_keyimges_as_spent(epee::to_span(key_im));
     return true;
   }
   //-----------------------------------------------------------------------------------------------
@@ -1596,9 +1601,9 @@ namespace cryptonote
     return m_mempool.get_pool_for_rpc(tx_infos, key_image_infos);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_short_chain_history(std::list<crypto::hash>& ids) const
+  bool core::get_short_chain_history(std::list<crypto::hash>& ids, uint64_t& current_height) const
   {
-    return m_blockchain_storage.get_short_chain_history(ids);
+    return m_blockchain_storage.get_short_chain_history(ids, current_height);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS::request& arg, NOTIFY_RESPONSE_GET_OBJECTS::request& rsp, cryptonote_connection_context& context)

@@ -136,7 +136,7 @@ private:
     // Full wallet callbacks
     virtual void on_new_block(uint64_t height, const cryptonote::block& block) {}
     virtual void on_reorg(uint64_t height, uint64_t blocks_detached, size_t transfers_detached) {}
-    virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, uint64_t burnt, const cryptonote::subaddress_index& subaddr_index, bool is_change, uint64_t unlock_time) {}
+    virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, uint64_t burnt, const cryptonote::subaddress_index& subaddr_index, const crypto::hash &payment_id, bool is_change, uint64_t unlock_time) {}
     virtual void on_unconfirmed_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index) {}
     virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx, uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index) {}
     virtual void on_skip_transaction(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx) {}
@@ -706,7 +706,15 @@ private:
      *
      * Transfer-style means that transactions are added until all payment outlays are fulfilled.
      */
-    std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, fee_priority priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, const unique_index_container& subtract_fee_from_outputs = {});     // pass subaddr_indices by value on purpose
+    std::vector<wallet2::pending_tx> create_transactions_2(
+      std::vector<cryptonote::tx_destination_entry> dsts,
+      const size_t fake_outs_count,
+      fee_priority priority,
+      const std::vector<uint8_t>& extra,
+      uint32_t subaddr_account,
+      std::set<uint32_t> subaddr_indices, // pass subaddr_indices by value on purpose
+      const unique_index_container& subtract_fee_from_outputs = {},
+      const std::size_t max_n_inputs = 0);
     /**
      * brief: create_transactions_all: create "sweep-all" style txs (or tx proposals in hot/cold & multisig wallets)
      * param: below - the money amount below which input selection should pull inputs from; higher amounts are excluded

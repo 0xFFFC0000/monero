@@ -2566,7 +2566,7 @@ void wallet2::process_new_scanned_transaction(
     // money received callbacks
     LOG_PRINT_L0("Received money: " << print_money(td.amount()) << ", with tx: " << txid);
     if (!ignore_callbacks && 0 != m_callback && td.m_amount > 0)
-      m_callback->on_money_received(height, txid, tx, td.m_amount, 0, td.m_subaddr_index, spends_one_of_ours(tx), td.m_tx.unlock_time);
+      m_callback->on_money_received(height, txid, tx, td.m_amount, 0, td.m_subaddr_index, payment_id, spends_one_of_ours(tx), td.m_tx.unlock_time);
   }
 
   THROW_WALLET_EXCEPTION_IF(tx_money_got_in_outs.size() != tx_amounts_individual_outs.size(), error::wallet_internal_error, "Inconsistent size of output arrays");
@@ -3934,6 +3934,35 @@ bool wallet2::accept_pool_tx_for_processing(const crypto::hash &txid)
 // Process an unconfirmed transfer after we know whether it's in the pool or not
 void wallet2::process_unconfirmed_transfer(bool incremental, const crypto::hash &txid, wallet2::unconfirmed_transfer_details &tx_details, bool seen_in_pool, std::chrono::system_clock::time_point now, bool refreshed)
 {
+  const auto set_tx_key_images_spent = [&](const bool spent)
+  {
+    for (size_t vini = 0; vini < tx_details.m_tx.vin.size(); ++vini)
+    {
+      if (tx_details.m_tx.vin[vini].type() != typeid(txin_to_key))
+        continue;
+
+      const crypto::key_image &key_image = boost::get<txin_to_key>(tx_details.m_tx.vin[vini]).k_image;
+      const auto it_ki = m_key_images.find(key_image);
+      if (it_ki == m_key_images.end())
+        continue;
+
+      const std::size_t i = it_ki->second;
+      if (i >= m_transfers.size())
+        continue;
+      const transfer_details &td = m_transfers.at(i);
+      if (td.m_key_image != key_image)
+        continue;
+      if (td.m_spent == spent)
+        continue;
+
+      LOG_PRINT_L1("Resetting spent status for output " << vini << ": " << key_image << " (spent=" << spent << ")");
+      if (spent)
+        set_spent(i, 0);
+      else
+        set_unspent(i);
+    }
+  };
+
   // TODO: set tx_propagation_timeout to CRYPTONOTE_DANDELIONPP_EMBARGO_AVERAGE * 3 / 2 after v15 hardfork
   constexpr const std::chrono::seconds tx_propagation_timeout{500};
   if (seen_in_pool)
@@ -3943,6 +3972,10 @@ void wallet2::process_unconfirmed_transfer(bool incremental, const crypto::hash 
       tx_details.m_state = wallet2::unconfirmed_transfer_details::pending_in_pool;
       MINFO("Pending txid " << txid << " seen in pool, marking as pending in pool");
     }
+
+    // The inputs are spent, they're in the pool! It's possible the tx was previously marked as failed, so we
+    // make sure to re-mark the outputs as spent.
+    set_tx_key_images_spent(true/*spent*/);
   }
   else
   {
@@ -3968,23 +4001,7 @@ void wallet2::process_unconfirmed_transfer(bool incremental, const crypto::hash 
       tx_details.m_state = wallet2::unconfirmed_transfer_details::failed;
 
       // the inputs aren't spent anymore, since the tx failed
-      for (size_t vini = 0; vini < tx_details.m_tx.vin.size(); ++vini)
-      {
-        if (tx_details.m_tx.vin[vini].type() == typeid(txin_to_key))
-        {
-          txin_to_key &tx_in_to_key = boost::get<txin_to_key>(tx_details.m_tx.vin[vini]);
-          for (size_t i = 0; i < m_transfers.size(); ++i)
-          {
-            const transfer_details &td = m_transfers[i];
-            if (td.m_key_image == tx_in_to_key.k_image)
-            {
-                LOG_PRINT_L1("Resetting spent status for output " << vini << ": " << td.m_key_image);
-                set_unspent(i);
-                break;
-            }
-          }
-        }
-      }
+      set_tx_key_images_spent(false/*spent*/);
     }
   }
 }
@@ -7358,7 +7375,7 @@ void wallet2::get_transfers(wallet2::transfer_container& incoming_transfers, con
   {
     // Exclude 0-amount Carrot change outputs. These were added to enable incoming view keys to identify all spend txs,
     // including 0-change spends.
-    if (!td.amount() && carrot::is_carrot_transaction_v1(td.m_tx) && m_confirmed_txs.find(td.m_txid) != m_confirmed_txs.end())
+    if (!td.amount() && carrot::is_carrot_transaction_v1(td.m_tx))
       continue;
 
     incoming_transfers.push_back(td);
@@ -10550,7 +10567,15 @@ static uint32_t get_count_above(const std::vector<wallet2::transfer_details> &tr
 // This system allows for sending (almost) the entire balance, since it does
 // not generate spurious change in all txes, thus decreasing the instantaneous
 // usable balance.
-std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, fee_priority priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, const unique_index_container& subtract_fee_from_outputs)
+std::vector<wallet2::pending_tx> wallet2::create_transactions_2(
+  std::vector<cryptonote::tx_destination_entry> dsts,
+  const size_t fake_outs_count,
+  fee_priority priority,
+  const std::vector<uint8_t>& extra,
+  uint32_t subaddr_account,
+  std::set<uint32_t> subaddr_indices,
+  const unique_index_container& subtract_fee_from_outputs,
+  const std::size_t max_n_inputs)
 {
   boost::lock_guard refresh_lock(m_refresh_mutex);
 
@@ -10571,6 +10596,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
       subaddr_indices,
       ignore_outputs_above(),
       ignore_outputs_below(),
+      max_n_inputs,
       subtract_fee_from_outputs,
       get_top_block_index(*this));
     std::vector<pending_tx> ptx_vector;

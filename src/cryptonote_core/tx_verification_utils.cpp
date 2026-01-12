@@ -44,6 +44,7 @@
 #define MONERO_DEFAULT_LOG_CATEGORY "verify"
 
 #define VER_ASSERT(cond, msgexpr) CHECK_AND_ASSERT_MES(cond, false, msgexpr)
+#define VER_ASSERT_EQ(a, b, msgexpr) VER_ASSERT(a == b, msgexpr << " (" << a << " != " << b << ")");
 
 using namespace cryptonote;
 
@@ -68,8 +69,8 @@ static bool check_fcmp_pp_expanded_tx(const transaction& tx)
 
     // Check pseudoOuts size against transaction inputs
     const size_t n_inputs = rv.p.pseudoOuts.size();
-    VER_ASSERT(n_inputs == tx.vin.size(), "Mismatched pseudo outs to inputs after expanding FCMP tx");
-    VER_ASSERT(n_inputs == rv.p.fcmp_ver_helper_data.key_images.size(), "Mismatched key images to inputs after expanding FCMP tx");
+    VER_ASSERT_EQ(n_inputs, tx.vin.size(), "Mismatched pseudo outs to inputs after expanding FCMP tx");
+    VER_ASSERT_EQ(n_inputs, rv.p.fcmp_ver_helper_data.key_images.size(), "Mismatched key images to inputs after expanding FCMP tx");
 
     // For each input, check that the key images were copied into the expanded RCT sig correctly
     for (size_t n = 0; n < n_inputs; ++n)
@@ -850,9 +851,11 @@ bool ver_mixed_rct_semantics(std::vector<const rct::rctSig*> rvv)
 bool batch_ver_fcmp_pp_consensus
 (
     pool_supplement& ps,
-    const std::unordered_map<uint64_t, std::pair<crypto::ec_point, uint8_t>>& tree_root_by_block_index
+    const std::unordered_map<uint64_t, std::pair<crypto::ec_point, uint8_t>>& tree_root_by_block_index,
+    std::unordered_map<crypto::hash, crypto::hash> &valid_input_verification_id_by_txid_out
 )
 {
+    valid_input_verification_id_by_txid_out.clear();
     if (ps.txs_by_txid.empty())
     {
         return true;
@@ -861,16 +864,24 @@ bool batch_ver_fcmp_pp_consensus
     // Collect unverified FCMP++ txs for batch verification
     std::unordered_map<uint64_t, fcmp_pp::TreeRootShared> decompressed_tree_roots_by_block_index;
     std::vector<fcmp_pp::FcmpPpVerifyInput> fcmp_pp_verify_inputs;
+    std::vector<std::size_t> n_inputs_per_proof;
     fcmp_pp_verify_inputs.reserve(ps.txs_by_txid.size());
+    n_inputs_per_proof.reserve(ps.txs_by_txid.size());
+
+    // Prepare input verification ID's for FCMP++'s we are verifying
+    std::unordered_map<crypto::hash, crypto::hash> input_verification_id_by_txid;
+    input_verification_id_by_txid.reserve(ps.txs_by_txid.size());
 
     for (auto &tx_entry : ps.txs_by_txid)
     {
+        const crypto::hash &txid = tx_entry.first;
         cryptonote::transaction &tx = tx_entry.second.first;
-        if (tx.pruned || tx.version != 2 || rct::is_rct_fcmp(tx.rct_signatures.type))
+        if (tx.pruned || tx.version != 2 || tx.rct_signatures.type != rct::RCTTypeFcmpPlusPlus)
         {
-            MDEBUG("FCMP batching verification: tx " << get_transaction_hash(tx) << " skipped");
             continue;
         }
+
+        MDEBUG("Preparing FCMP++ tx " << txid << " for batch verification " << "(" << tx.vin.size() << " inputs)");
 
         const uint64_t reference_block = tx.rct_signatures.p.reference_block;
         const bool r = collect_fcmp_pp_tx_verify_input(tx,
@@ -878,10 +889,15 @@ bool batch_ver_fcmp_pp_consensus
             decompressed_tree_roots_by_block_index[reference_block],
             fcmp_pp_verify_inputs.emplace_back());
 
+        n_inputs_per_proof.push_back(tx.vin.size());
+
         if (!r)
         {
             return false;
         }
+
+        input_verification_id_by_txid[txid] = make_input_verification_id(txid,
+            tree_root_by_block_index.at(reference_block).first);
     }
 
     if (fcmp_pp_verify_inputs.empty())
@@ -892,11 +908,14 @@ bool batch_ver_fcmp_pp_consensus
     // Ok, we're ready to batch verify all FCMP++ txs now
     const std::size_t n_proofs = fcmp_pp_verify_inputs.size();
     MDEBUG("Batch verifying " << n_proofs << " FCMP++ txs");
-    if (!rct::batchVerifyFcmpPpProofs(std::move(fcmp_pp_verify_inputs)))
+    if (!rct::batchVerifyFcmpPpProofs(std::move(fcmp_pp_verify_inputs), n_inputs_per_proof))
     {
         return false;
     }
     MDEBUG("Successfully batch verified " << n_proofs << " FCMP++ txs");
+
+    // All FCMP++'s have been verified, so set the valid input verification ID's
+    valid_input_verification_id_by_txid_out = std::move(input_verification_id_by_txid);
 
     return true;
 }

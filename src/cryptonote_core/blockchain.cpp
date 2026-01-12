@@ -102,7 +102,7 @@ static bool get_fcmp_tx_tree_root(const BlockchainDB *db, const cryptonote::tran
   CHECK_AND_ASSERT_MES(!tx.pruned, false, "can't get root for pruned FCMP txs");
 
   // Make sure reference block exists in the chain
-  CHECK_AND_ASSERT_MES(tx.rct_signatures.p.reference_block < db->height(), false,
+  CHECK_AND_NO_ASSERT_MES_L1(tx.rct_signatures.p.reference_block < db->height(), false,
       "tx " << get_transaction_hash(tx) << " included reference block that was too high");
 
   // Get the tree root and n tree layers at provided block
@@ -837,13 +837,13 @@ crypto::hash Blockchain::get_tail_id() const
  *   powers of 2 less recent from there, so 13, 17, 25, etc...
  *
  */
-bool Blockchain::get_short_chain_history(std::list<crypto::hash>& ids) const
+bool Blockchain::get_short_chain_history(std::list<crypto::hash>& ids, uint64_t& current_height) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   uint64_t i = 0;
   uint64_t current_multiplier = 1;
-  uint64_t sz = m_db->height();
+  uint64_t sz = current_height = m_db->height();
 
   if(!sz)
     return true;
@@ -2831,29 +2831,11 @@ static bool batch_verify_fcmp_pp_txs(const BlockchainDB *db,
     }
   }
 
-  // 2. Batch verify FCMP++'s
-  if (!batch_ver_fcmp_pp_consensus(extra_block_txs, tree_root_by_block_idx))
+  // 2. Batch verify FCMP++'s and collect verIDs
+  if (!batch_ver_fcmp_pp_consensus(extra_block_txs, tree_root_by_block_idx, valid_input_verification_id_by_txid_out))
   {
     MERROR_VER("Failed to batch verify FCMP++ txs");
     return false;
-  }
-
-  // 3. If successful, calculate and return verIDs for FCMP++ txs
-  for (const auto &p : extra_block_txs.txs_by_txid)
-  {
-    const cryptonote::transaction &tx = p.second.first;
-    if (tx.version != 2 || !rct::is_rct_fcmp(tx.rct_signatures.type))
-      continue;
-
-    const auto root_it = tree_root_by_block_idx.find(tx.rct_signatures.p.reference_block);
-    CHECK_AND_ASSERT_MES(root_it != tree_root_by_block_idx.cend(), false,
-      "Batch FCMP verificcation successful even though referenced FCMP tree root is missing in cache");
-    CHECK_AND_ASSERT_MES(root_it->second.second == tx.rct_signatures.p.n_tree_layers, false,
-      "Batch FCMP verificcation successful even though referenced n_tree_layers mismatched tx's");
-
-    const crypto::hash txid = get_transaction_hash(tx);
-    const crypto::ec_point &dereferenced_fcmp_root = root_it->second.first;
-    valid_input_verification_id_by_txid_out[txid] = make_input_verification_id(txid, dereferenced_fcmp_root);
   }
 
   return true;
@@ -3546,6 +3528,17 @@ bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
   }
   return false;
 }
+//------------------------------------------------------------------
+std::vector<bool> Blockchain::have_tx_keyimges_as_spent(const epee::span<const crypto::key_image> key_imgs) const
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  // WARNING: this function does not take m_blockchain_lock, and thus should only call read only
+  // m_db functions which do not depend on one another (ie, no getheight + gethash(height-1), as
+  // well as not accessing class members, even read only (ie, m_invalid_blocks). The caller must
+  // lock if it is otherwise needed.
+  return m_db->has_key_images(key_imgs);
+}
+//------------------------------------------------------------------
 bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const fcmp_pp::TreeRootShared &tree_root)
 {
   PERF_TIMER(expand_transaction_2);
@@ -3635,14 +3628,15 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
     {
       CHECK_AND_ASSERT_MES(tree_root != nullptr, false, "tree_root is null");
       rv.p.fcmp_ver_helper_data.tree_root = tree_root;
-      rv.p.fcmp_ver_helper_data.key_images.reserve(tx.vin.size());
+      rv.p.fcmp_ver_helper_data.key_images.resize(tx.vin.size());
       for (size_t n = 0; n < tx.vin.size(); ++n)
       {
-        crypto::key_image ki = boost::get<txin_to_key>(tx.vin[n]).k_image;
-        rv.p.fcmp_ver_helper_data.key_images.emplace_back(std::move(ki));
+        rv.p.fcmp_ver_helper_data.key_images[n] = boost::get<txin_to_key>(tx.vin[n]).k_image;
       }
     }
   }
+  // WARNING to any future devs adding to this function: this function can be called with an already expanded tx.
+  // Make sure this function can handle that properly.
   else
   {
     CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + boost::lexical_cast<std::string>(rv.type));
@@ -3854,7 +3848,7 @@ bool Blockchain::check_tx_inputs(transaction& tx,
 
     if(have_tx_keyimg_as_spent(in_to_key.k_image))
     {
-      MERROR_VER("Key image already spent in blockchain: " << epee::string_tools::pod_to_hex(in_to_key.k_image));
+      MERROR_VER("Transaction " << get_transaction_hash(tx) << "spends key image already spent in blockchain: " << epee::string_tools::pod_to_hex(in_to_key.k_image));
       tvc.m_double_spend = true;
       return false;
     }
@@ -3907,9 +3901,11 @@ bool Blockchain::check_tx_inputs(transaction& tx,
 
   // Read the db for the tree root for FCMP txs
   crypto::ec_point ref_tree_root{};
-  if (rct::is_rct_fcmp(tx.rct_signatures.type))
+  if (rct::is_rct_fcmp(tx.rct_signatures.type) && !get_fcmp_tx_tree_root(m_db, tx, ref_tree_root))
   {
-    CHECK_AND_ASSERT_MES(get_fcmp_tx_tree_root(m_db, tx, ref_tree_root), false, "failed to get tree root");
+    // We might not be synced yet and an honest synced peer may have sent us the tx, so we make this a no-drop-offense
+    tvc.m_no_drop_offense = true;
+    return false;
   }
 
   const crypto::hash txid = get_transaction_hash(tx);

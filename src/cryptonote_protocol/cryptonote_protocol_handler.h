@@ -191,6 +191,7 @@ namespace cryptonote
     size_t skip_unneeded_hashes(cryptonote_connection_context& context, bool check_block_queue) const;
     bool request_txpool_complement(cryptonote_connection_context &context);
     void hit_score(cryptonote_connection_context &context, int32_t score);
+    void calculate_dynamic_span(const double blocks_per_seconds);
 
     t_core& m_core;
 
@@ -203,6 +204,7 @@ namespace cryptonote
     std::atomic<bool> m_ask_for_txpool_complement;
     boost::mutex m_sync_lock;
     block_queue m_block_queue;
+    boost::mutex m_check_span_queue_mutex;
     epee::math_helper::once_a_time_seconds<8> m_idle_peer_kicker;
     epee::math_helper::once_a_time_milliseconds<100> m_standby_checker;
     epee::math_helper::once_a_time_seconds<101> m_sync_search_checker;
@@ -217,6 +219,9 @@ namespace cryptonote
     uint64_t m_sync_download_chain_size, m_sync_download_objects_size;
     size_t m_block_download_max_size;
     bool m_sync_pruned_blocks;
+    size_t m_span_time;
+    std::atomic<size_t> m_span_limit;
+    std::atomic<size_t> m_bss;
 
     request_manager m_request_manager;
 

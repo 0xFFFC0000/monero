@@ -51,6 +51,7 @@
 #include "net/network_throttle-detail.hpp"
 #include "common/pruning.h"
 #include "common/util.h"
+#include "misc_log_ex.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "net.cn"
@@ -62,17 +63,18 @@
     const char *cat = "net.p2p.msg"; \
     if (ELPP->vRegistry()->allowed(level, cat)) { \
       init; \
-      if (test) \
-        el::base::Writer(level, el::Color::Default, __FILE__, __LINE__, ELPP_FUNC, el::base::DispatchAction::NormalLog).construct(cat) << x; \
+      if (test) { \
+        LOG_TO_STRING(x); \
+        el::base::Writer(level, el::Color::Default, __FILE__, __LINE__, ELPP_FUNC, el::base::DispatchAction::NormalLog).construct(cat) << str; \
+      } \
     } \
   } while(0)
 
 #define MLOG_PEER_STATE(x) \
   MCINFO(MONERO_DEFAULT_LOG_CATEGORY, context << "[" << epee::string_tools::to_string_hex(context.m_pruning_seed) << "] state: " << x << " in state " << cryptonote::get_protocol_state_string(context.m_state))
 
-#define BLOCK_QUEUE_NSPANS_THRESHOLD 10 // chunks of N blocks
+#define BLOCK_QUEUE_NSPANS_MINIMUM             10  // minimum number of spans
 #define BLOCK_QUEUE_SIZE_THRESHOLD (100*1024*1024) // MB
-#define BLOCK_QUEUE_FORCE_DOWNLOAD_NEAR_BLOCKS 1000
 #define REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD_STANDBY (5 * 1000000) // microseconds
 #define REQUEST_NEXT_SCHEDULED_SPAN_THRESHOLD (30 * 1000000) // microseconds
 #define IDLE_PEER_KICK_TIME (240 * 1000000) // microseconds
@@ -197,6 +199,10 @@ namespace cryptonote
                                                                                                               m_stopping(false),
                                                                                                               m_no_sync(false),
                                                                                                               m_request_manager(max_n_txs_per_packet())
+                                                                                                              m_span_limit(BLOCK_QUEUE_NSPANS_MINIMUM),
+                                                                                                              m_span_time(0),
+                                                                                                              m_bss(0)
+
   {
     if(!m_p2p)
       m_p2p = &m_p2p_stub;
@@ -218,8 +224,22 @@ namespace cryptonote
 
     m_block_download_max_size = command_line::get_arg(vm, cryptonote::arg_block_download_max_size);
     m_sync_pruned_blocks = command_line::get_arg(vm, cryptonote::arg_sync_pruned_blocks);
+    m_span_time = command_line::get_arg(vm, cryptonote::arg_span_limit);
 
     return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------
+  template<class t_core>
+  void t_cryptonote_protocol_handler<t_core>::calculate_dynamic_span(const double blocks_per_seconds)
+  {
+    size_t current_bss = m_bss.load();
+    size_t current_span_limit = m_span_limit.load();
+    MINFO("m_bss : " << current_bss << ", blocks_per_seconds : " << blocks_per_seconds << ", current_span_limit : " << current_span_limit);
+    current_span_limit = (current_bss && blocks_per_seconds) ? (( blocks_per_seconds * 60 * m_span_time ) / current_bss) : BLOCK_QUEUE_NSPANS_MINIMUM;
+    if (current_span_limit < BLOCK_QUEUE_NSPANS_MINIMUM)
+      current_span_limit = BLOCK_QUEUE_NSPANS_MINIMUM;
+    m_span_limit = current_span_limit;
+    MINFO("calculated dynamic span limit is span_limit : " << m_span_limit);
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
@@ -284,8 +304,7 @@ namespace cryptonote
     {
       NOTIFY_REQUEST_CHAIN::request r = {};
       context.m_needed_objects.clear();
-      context.m_expect_height = m_core.get_current_blockchain_height();
-      m_core.get_short_chain_history(r.block_ids);
+      m_core.get_short_chain_history(r.block_ids, context.m_expect_height);
       handler_request_blocks_history( r.block_ids ); // change the limit(?), sleep(?)
       r.prune = m_sync_pruned_blocks;
       context.m_last_request_time = boost::posix_time::microsec_clock::universal_time();
@@ -747,8 +766,7 @@ namespace cryptonote
       context.m_needed_objects.clear();
       context.m_state = cryptonote_connection_context::state_synchronizing;
       NOTIFY_REQUEST_CHAIN::request r = {};
-      context.m_expect_height = m_core.get_current_blockchain_height();
-      m_core.get_short_chain_history(r.block_ids);
+      m_core.get_short_chain_history(r.block_ids, context.m_expect_height);
       handler_request_blocks_history( r.block_ids ); // change the limit(?), sleep(?)
       r.prune = m_sync_pruned_blocks;
       context.m_last_request_time = boost::posix_time::microsec_clock::universal_time();
@@ -1695,6 +1713,13 @@ namespace cryptonote
 
           MDEBUG(context << "Block process time (" << blocks.size() << " blocks, " << num_txs << " txs): " << block_process_time_full + transactions_process_time_full << " (" << transactions_process_time_full << "/" << block_process_time_full << ") ms");
 
+          // Grab the span queue check lock so that we make sure we finish writing the block to the db before checking
+          // the span queue again. Otherwise it's possible for the span queue check to read the db height at n-1 in
+          // thread1, then wait for block n to be added and its span removed from the queue in this thread2, then check
+          // the span queue in thread1 and incorrectly think the span starting at block n is missing.
+          // TODO: a better sync protocol.
+          boost::unique_lock<boost::mutex> check_span_lock{m_check_span_queue_mutex};
+
           if (!m_core.cleanup_handle_incoming_blocks())
           {
             LOG_PRINT_CCONTEXT_L0("Failure in cleanup_handle_incoming_blocks");
@@ -1708,6 +1733,8 @@ namespace cryptonote
           {
             const uint64_t target_blockchain_height = m_core.get_target_blockchain_height();
             const boost::posix_time::time_duration dt = boost::posix_time::microsec_clock::universal_time() - start;
+            const double blocks_per_seconds = (((current_blockchain_height - previous_height) * 1e6) / dt.total_microseconds());
+            calculate_dynamic_span(blocks_per_seconds);
             std::string progress_message = "";
             if (current_blockchain_height < target_blockchain_height)
             {
@@ -1731,7 +1758,7 @@ namespace cryptonote
             std::string timing_message = "";
             if (ELPP->vRegistry()->allowed(el::Level::Info, "sync-info"))
               timing_message = std::string(" (") + std::to_string(dt.total_microseconds()/1e6) + " sec, "
-                + std::to_string((current_blockchain_height - previous_height) * 1e6 / dt.total_microseconds())
+                + std::to_string(blocks_per_seconds)
                 + " blocks/sec), " + std::to_string(m_block_queue.get_data_size() / 1048576.f) + " MB queued in "
                 + std::to_string(m_block_queue.get_num_filled_spans()) + " spans, stripe "
                 + std::to_string(previous_stripe) + " -> " + std::to_string(current_stripe);
@@ -1740,7 +1767,10 @@ namespace cryptonote
             MGINFO_YELLOW("Synced " << current_blockchain_height << "/" << target_blockchain_height
                 << progress_message << timing_message);
             if (previous_stripe != current_stripe)
+            {
+              check_span_lock.unlock();
               notify_new_stripe(context, current_stripe);
+            }
           }
         }
       }
@@ -2161,7 +2191,7 @@ skip:
   {
     // take out blocks we already have
     size_t skip = 0;
-    while (skip < context.m_needed_objects.size() && (m_core.have_block(context.m_needed_objects[skip].first) || (check_block_queue && m_block_queue.have(context.m_needed_objects[skip].first))))
+    while (skip < context.m_needed_objects.size() && (m_core.have_block_unlocked(context.m_needed_objects[skip].first) || (check_block_queue && m_block_queue.have(context.m_needed_objects[skip].first))))
     {
       // if we're popping the last hash, record it so we can ask again from that hash,
       // this prevents never being able to progress on peers we get old hash lists from
@@ -2217,15 +2247,24 @@ skip:
     {
       do
       {
-        size_t nspans = m_block_queue.get_num_filled_spans();
-        size_t size = m_block_queue.get_data_size();
+        // Enforce synchronization when checking the span queue. This is a simple solution to prevent unexpected races
+        // when checking the span queue. It's not ideal and doesn't fully solve all possible races.
+        // This section largely needs to be reworked.
+        // Warning: make sure to unlock this to avoid deadlocks if necessary
+        // If any of the functions below acquire the txpool lock (m_transactions_lock) or m_incoming_tx_lock, we can
+        // deadlock, since m_core.prepare_handle_incoming_blocks acquires both and does not release until
+        // m_core.cleanup_handle_incoming_blocks.
+        boost::unique_lock<boost::mutex> check_span_lock{m_check_span_queue_mutex};
+
+        const size_t nspans = m_block_queue.get_num_filled_spans();
+        const size_t size = m_block_queue.get_data_size();
         const uint64_t bc_height = m_core.get_current_blockchain_height();
         const auto next_needed_pruning_stripe = get_next_needed_pruning_stripe();
         const uint32_t add_stripe = tools::get_pruning_stripe(bc_height, context.m_remote_blockchain_height, CRYPTONOTE_PRUNING_LOG_STRIPES);
         const uint32_t peer_stripe = tools::get_pruning_stripe(context.m_pruning_seed);
         const uint32_t local_stripe = tools::get_pruning_stripe(m_core.get_blockchain_pruning_seed());
         const size_t block_queue_size_threshold = m_block_download_max_size ? m_block_download_max_size : BLOCK_QUEUE_SIZE_THRESHOLD;
-        bool queue_proceed = nspans < BLOCK_QUEUE_NSPANS_THRESHOLD || size < block_queue_size_threshold;
+        const bool queue_proceed_init = (nspans < m_span_limit.load()) && (size < block_queue_size_threshold);
         // get rid of blocks we already requested, or already have
         if (skip_unneeded_hashes(context, true) && context.m_needed_objects.empty() && context.m_num_requested == 0)
         {
@@ -2236,19 +2275,21 @@ skip:
           }
           MDEBUG(context << "Nothing to get from this peer, and it's not ahead of us, all done");
           context.set_state_normal();
+          check_span_lock.unlock();
           if (m_core.get_current_blockchain_height() >= m_core.get_target_blockchain_height())
             on_connection_synchronized();
           return true;
         }
-        uint64_t next_needed_height = m_block_queue.get_next_needed_height(bc_height);
-        uint64_t next_block_height;
-        if (context.m_needed_objects.empty())
-          next_block_height = next_needed_height;
-        else
-          next_block_height = context.m_last_response_height - context.m_needed_objects.size() + 1;
-        bool stripe_proceed_main = ((m_sync_pruned_blocks && local_stripe && add_stripe != local_stripe) || add_stripe == 0 || peer_stripe == 0 || add_stripe == peer_stripe) && (next_block_height < bc_height + BLOCK_QUEUE_FORCE_DOWNLOAD_NEAR_BLOCKS || next_needed_height < bc_height + BLOCK_QUEUE_FORCE_DOWNLOAD_NEAR_BLOCKS);
-        bool stripe_proceed_secondary = tools::has_unpruned_block(next_block_height, context.m_remote_blockchain_height, context.m_pruning_seed);
-        bool proceed = stripe_proceed_main || (queue_proceed && stripe_proceed_secondary);
+        const uint64_t next_needed_height = m_block_queue.get_next_needed_height(bc_height);
+        const uint64_t next_block_height = context.m_needed_objects.empty()
+          ? next_needed_height
+          : context.m_last_response_height - context.m_needed_objects.size() + 1;
+        const bool next_height_proceed = next_needed_height < std::max(next_block_height, bc_height + 1);
+        const bool stripe_proceed_main = next_height_proceed && ((m_sync_pruned_blocks && local_stripe && add_stripe != local_stripe) || add_stripe == 0 || peer_stripe == 0 || add_stripe == peer_stripe);
+        const bool stripe_proceed_secondary = tools::has_unpruned_block(next_block_height, context.m_remote_blockchain_height, context.m_pruning_seed);
+        // override queue_proceed_init if we need the immediate block(s)
+        const bool queue_proceed = (next_needed_height == bc_height) ? stripe_proceed_main : queue_proceed_init;
+        const bool proceed = queue_proceed && (stripe_proceed_main || stripe_proceed_secondary);
         if (!stripe_proceed_main && !stripe_proceed_secondary && should_drop_connection(context, tools::get_pruning_stripe(next_block_height, context.m_remote_blockchain_height, CRYPTONOTE_PRUNING_LOG_STRIPES)))
         {
           if (!context.m_is_income)
@@ -2256,12 +2297,21 @@ skip:
           return false; // drop outgoing connections
         }
 
-        MDEBUG(context << "proceed " << proceed << " (queue " << queue_proceed << ", stripe " << stripe_proceed_main << "/" <<
-          stripe_proceed_secondary << "), " << next_needed_pruning_stripe.first << "-" << next_needed_pruning_stripe.second <<
-          " needed, bc add stripe " << add_stripe << ", we have " << peer_stripe << "), bc_height " << bc_height);
-        MDEBUG(context << "  - next_block_height " << next_block_height << ", seed " << epee::string_tools::to_string_hex(context.m_pruning_seed) <<
-          ", next_needed_height "<< next_needed_height);
-        MDEBUG(context << "  - last_response_height " << context.m_last_response_height << ", m_needed_objects size " << context.m_needed_objects.size());
+        MDEBUG(context
+               << "add_stripe : " << add_stripe
+               << ", peer_stripe : " << peer_stripe
+               << ", local_stripe : " << local_stripe
+               << ", next_needed_pruning_stripe first-second : " << next_needed_pruning_stripe.first << "-" << next_needed_pruning_stripe.second << " needed"
+               << ", seed " << epee::string_tools::to_string_hex(context.m_pruning_seed)
+               << ", last_response_height " << context.m_last_response_height << ", m_needed_objects size " << context.m_needed_objects.size()
+               << ", proceed : " << proceed
+               << ", queue_proceed : " << queue_proceed
+               << ", stripe_proceed_main : " << stripe_proceed_main
+               << ", stripe_proceed_secondary : " << stripe_proceed_secondary
+               << ", next_height_proceed : " << next_height_proceed
+               << ", next_block_height/next_needed_height/bc_height : " << next_block_height << "/" << next_needed_height << "/" << bc_height
+               << ", nspans/span_limit : " << nspans << "/" << m_span_limit
+               << ", queue size/size_limit : " << size << "/" << block_queue_size_threshold);
 
         // if we're waiting for next span, try to get it before unblocking threads below,
         // or a runaway downloading of future spans might happen
@@ -2297,6 +2347,7 @@ skip:
             MLOG_PEER_STATE("resuming");
             context.m_state = cryptonote_connection_context::state_standby;
             ++context.m_callback_request_count;
+            check_span_lock.unlock();
             m_p2p->request_callback(context);
             return true;
           }
@@ -2343,7 +2394,7 @@ skip:
       NOTIFY_REQUEST_GET_OBJECTS::request req;
       bool is_next = false;
       size_t count = 0;
-      size_t l_m_bss = m_core.get_block_sync_size(m_core.get_current_blockchain_height(), max_average_of_blocksize_in_queue());
+      size_t l_m_bss = m_bss = m_core.get_block_sync_size(m_core.get_current_blockchain_height(), max_average_of_blocksize_in_queue());
       std::pair<uint64_t, uint64_t> span = std::make_pair(0, 0);
       if (force_next_span)
       {
@@ -2536,8 +2587,7 @@ skip:
     {//we have to fetch more objects ids, request blockchain entry
 
       NOTIFY_REQUEST_CHAIN::request r = {};
-      context.m_expect_height = m_core.get_current_blockchain_height();
-      m_core.get_short_chain_history(r.block_ids);
+      m_core.get_short_chain_history(r.block_ids, context.m_expect_height);
       CHECK_AND_ASSERT_MES(!r.block_ids.empty(), false, "Short chain history is empty");
 
       // we'll want to start off from where we are on that peer, which may not be added yet
@@ -2604,7 +2654,7 @@ skip:
           {
             synced_seconds = 1;
           }
-          float blocks_per_second = (1000 * synced_blocks / synced_seconds) / 1000.0f;
+          const float blocks_per_second = (1000 * synced_blocks / synced_seconds) / 1000.0f;
           MGINFO_YELLOW("Synced " << synced_blocks << " blocks in "
             << tools::get_human_readable_timespan(synced_seconds) << " (" << blocks_per_second << " blocks per second)");
         }
@@ -2660,7 +2710,7 @@ skip:
   int t_cryptonote_protocol_handler<t_core>::handle_response_chain_entry(int command, NOTIFY_RESPONSE_CHAIN_ENTRY::request& arg, cryptonote_connection_context& context)
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_RESPONSE_CHAIN_ENTRY: m_block_ids.size()=" << arg.m_block_ids.size()
-      << ", m_start_height=" << arg.start_height << ", m_total_height=" << arg.total_height);
+      << ", m_start_height=" << arg.start_height << ", m_total_height=" << arg.total_height << ", expect height=" << context.m_expect_height);
     MLOG_PEER_STATE("received chain");
 
     if (context.m_expect_response != NOTIFY_RESPONSE_CHAIN_ENTRY::ID)
@@ -2865,6 +2915,12 @@ skip:
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::check_txpool_complement()
   {
+    if (!is_synchronized())
+    {
+      MDEBUG("Not ready for txpool complement");
+      return true;
+    }
+
     m_p2p->for_each_connection([&](cryptonote_connection_context& context, nodetool::peerid_type peer_id, uint32_t support_flags)->bool
     {
       if(context.m_state < cryptonote_connection_context::state_synchronizing)

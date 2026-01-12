@@ -287,6 +287,15 @@ namespace cryptonote
     bool have_tx_keyimges_as_spent(const transaction &tx) const;
 
     /**
+     * @brief check if key images are already spent on the blockchain
+     *
+     * @param key_imgs the key images to search for
+     *
+     * @return true at element `i` iff `key_imgs[i]` is already spent in the blockchain, else false
+     */
+    std::vector<bool> have_tx_keyimges_as_spent(const epee::span<const crypto::key_image> key_imgs) const;
+
+    /**
      * @brief check if a key image is already spent on the blockchain
      *
      * Whenever a transaction output is used as an input for another transaction
@@ -440,10 +449,11 @@ namespace cryptonote
      *   powers of 2 less recent from there, so 13, 17, 25, etc...
      *
      * @param ids return-by-reference list to put the resulting hashes in
+     * @param current_height the current blockchain height, return-by-reference
      *
      * @return true
      */
-    bool get_short_chain_history(std::list<crypto::hash>& ids) const;
+    bool get_short_chain_history(std::list<crypto::hash>& ids, uint64_t& current_height) const;
 
     /**
      * @brief get recent block hashes for a foreign chain
@@ -630,6 +640,9 @@ namespace cryptonote
      * RingCT transactions do not transmit some of their data if it
      * can be reconstituted by the receiver. This function expands
      * that implicit data.
+     *
+     * This function can potentially be called with an already
+     * expanded tx.
      */
     static bool expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys, const fcmp_pp::TreeRootShared &tree_root);
 
