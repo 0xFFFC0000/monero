@@ -79,6 +79,89 @@ TEST(request_manager, basic_usage)
     req_manager.remove_peer(peer);
 }
 //----------------------------------------------------------------------------------------------------------------------
+TEST(request_manager, cancel_syncing_peer_requests)
+{
+    request_manager req_manager(2, 0);
+    const auto peer = uuid_from_char(1);
+    const auto other_peer = uuid_from_char(2);
+    const std::vector<crypto::hash> hashes{crypto::hash{1}, crypto::hash{2}, crypto::hash{3}};
+    ASSERT_EQ(req_manager.enqueue_requests(hashes, peer).tx_hashes.size(), 2);
+    ASSERT_TRUE(req_manager.enqueue_requests({hashes.begin(), hashes.begin() + 2}, other_peer).tx_hashes.empty());
+
+    req_manager.cancel_peer_requests(peer);
+    EXPECT_TRUE(req_manager.remove_stale_requests().empty());
+    EXPECT_EQ(req_manager.fly_available_requests(other_peer).tx_hashes.size(), 2);
+    EXPECT_EQ(req_manager.fly_available_requests(peer).tx_hashes, std::vector<crypto::hash>{hashes.back()});
+    EXPECT_EQ(req_manager.enqueue_requests({crypto::hash{4}}, peer).tx_hashes.size(), 1);
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(request_manager, canceled_requests_preserve_completed_history)
+{
+    const size_t sample_size = P2P_MIN_SAMPLE_SIZE_FOR_DROPPING;
+    request_manager req_manager(sample_size, 0);
+    const auto peer = uuid_from_char(1);
+    std::vector<crypto::hash> hashes;
+    for (size_t i = 0; i < sample_size; ++i)
+      hashes.push_back(crypto::hash{static_cast<char>(i)});
+
+    // Record misses just below the sample threshold.
+    ASSERT_EQ(req_manager.enqueue_requests({hashes.begin(), hashes.end() - 1}, peer).tx_hashes.size(), sample_size - 1);
+    EXPECT_TRUE(req_manager.remove_stale_requests().empty());
+
+    ASSERT_EQ(req_manager.enqueue_requests(hashes, peer).tx_hashes.size(), sample_size);
+    req_manager.cancel_peer_requests(peer);
+    EXPECT_TRUE(req_manager.remove_stale_requests().empty());
+    ASSERT_EQ(req_manager.enqueue_requests({hashes.back()}, peer).tx_hashes.size(), 1);
+    EXPECT_EQ(req_manager.remove_stale_requests().count(peer), 1);
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(request_manager, deferred_requests_wait_for_resume)
+{
+    const size_t sample_size = P2P_MIN_SAMPLE_SIZE_FOR_DROPPING;
+    request_manager req_manager(sample_size, 0);
+    const auto peer = uuid_from_char(1);
+    std::vector<crypto::hash> hashes;
+    for (size_t i = 0; i < sample_size; ++i)
+        hashes.push_back(crypto::hash{static_cast<char>(i)});
+
+    const auto deferred = req_manager.enqueue_requests(hashes, peer, false);
+    EXPECT_TRUE(deferred.tx_hashes.empty());
+    EXPECT_TRUE(req_manager.remove_stale_requests().empty());
+
+    const auto resumed = req_manager.fly_available_requests(peer);
+    EXPECT_GT(resumed.nonce, deferred.nonce);
+    EXPECT_EQ(std::unordered_set<crypto::hash>(resumed.tx_hashes.begin(), resumed.tx_hashes.end()),
+        std::unordered_set<crypto::hash>(hashes.begin(), hashes.end()));
+    // Only the resumed requests count toward the failure rate.
+    EXPECT_EQ(req_manager.remove_stale_requests().count(peer), 1);
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(request_manager, deferred_requests_do_not_block_other_peers)
+{
+    request_manager req_manager(2, 0);
+    const auto peer = uuid_from_char(1);
+    const auto other_peer = uuid_from_char(2);
+    const crypto::hash shared{1}, deferred{2};
+    EXPECT_TRUE(req_manager.enqueue_requests({shared, deferred}, peer, false).tx_hashes.empty());
+    EXPECT_EQ(req_manager.enqueue_requests({shared}, other_peer).tx_hashes, std::vector<crypto::hash>{shared});
+    EXPECT_TRUE(req_manager.remove_request(shared));
+    EXPECT_EQ(req_manager.fly_available_requests(peer).tx_hashes, std::vector<crypto::hash>{deferred});
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(request_manager, deferred_requests_respect_queue_limit)
+{
+    request_manager req_manager(2, 0, 2);
+    const auto peer = uuid_from_char(1);
+    const crypto::hash first{1}, second{2}, overflow{3};
+    EXPECT_TRUE(req_manager.enqueue_requests({first, first, second, overflow}, peer, false).tx_hashes.empty());
+    EXPECT_FALSE(req_manager.remove_request(overflow));
+    EXPECT_TRUE(req_manager.remove_request(first));
+    EXPECT_FALSE(req_manager.remove_request(first));
+    EXPECT_TRUE(req_manager.enqueue_requests({second, overflow}, peer, false).tx_hashes.empty());
+    EXPECT_TRUE(req_manager.remove_request(second));
+    EXPECT_EQ(req_manager.fly_available_requests(peer).tx_hashes, std::vector<crypto::hash>{overflow});
+}
+//----------------------------------------------------------------------------------------------------------------------
 TEST(request_manager, multiple_peers)
 {
     const uint8_t MAX_IN_FLIGHT = 4;

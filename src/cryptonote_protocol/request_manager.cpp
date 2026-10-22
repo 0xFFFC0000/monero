@@ -84,6 +84,29 @@ void request_manager::remove_peer(const boost::uuids::uuid &peer_id) {
   m_connection_stats.erase(peer_id);
 }
 
+void request_manager::cancel_peer_requests(const boost::uuids::uuid &peer_id) {
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  auto& by_peer = get_requests_by_peer_id(m_requested_txs);
+  auto range = by_peer.equal_range(peer_id);
+  for (auto it = range.first; it != range.second; ++it) {
+    if (!it->in_flight)
+      continue;
+    const bool r = by_peer.modify(it, [](tx_request &request) {
+      request.nonce = 0;
+      request.in_flight = false;
+      request.processing = false;
+    });
+    CHECK_AND_ASSERT_MES_NO_RET(r, "Failed to cancel tx request");
+  }
+
+  const auto stats = m_connection_stats.find(peer_id);
+  if (stats != m_connection_stats.end()) {
+    // Exclude canceled requests from the failure-rate denominator.
+    stats->second.n_total_requests -= stats->second.in_flight_requests.load();
+    stats->second.in_flight_requests = 0;
+  }
+}
+
 std::unordered_set<boost::uuids::uuid> request_manager::remove_stale_requests() {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
   std::unordered_set<boost::uuids::uuid> drop_peers_out;
@@ -120,7 +143,7 @@ std::unordered_set<boost::uuids::uuid> request_manager::remove_stale_requests() 
   return drop_peers_out;
 }
 
-request_manager::tx_request_t request_manager::enqueue_requests(const std::vector<crypto::hash> &tx_hashes, const boost::uuids::uuid &peer_id) {
+request_manager::tx_request_t request_manager::enqueue_requests(const std::vector<crypto::hash> &tx_hashes, const boost::uuids::uuid &peer_id, const bool allow_flight) {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
   tx_request_t tx_req(*this, peer_id);
@@ -133,7 +156,7 @@ request_manager::tx_request_t request_manager::enqueue_requests(const std::vecto
     auto it = by_peer_and_tx.find(boost::make_tuple(peer_id, tx_hash));
 
     const bool in_queue = it != by_peer_and_tx.end();
-    const bool let_it_fly = m_connection_stats[peer_id].in_flight_requests < m_max_in_flight
+    const bool let_it_fly = allow_flight && m_connection_stats[peer_id].in_flight_requests < m_max_in_flight
         && !this->request_is_in_flight(tx_hash);
 
     if (!let_it_fly) {

@@ -97,13 +97,17 @@ public:
 
   void remove_peer(const boost::uuids::uuid &peer_id);
 
+  // Requeue in-flight requests, preserving the peer's nonce and completed history.
+  void cancel_peer_requests(const boost::uuids::uuid &peer_id);
+
   // Returns the set of peers to drop because they've missed too many requests
   std::unordered_set<boost::uuids::uuid> remove_stale_requests();
 
   // Return the tx_request_t object that should be immediately sent over the wire
   // The function internally adds all passed tx_hashes to the request manager queue for the
   // given peer, but may only need to request some of them.
-  tx_request_t enqueue_requests(const std::vector<crypto::hash> &tx_hashes, const boost::uuids::uuid &id);
+  tx_request_t enqueue_requests(const std::vector<crypto::hash> &tx_hashes, const boost::uuids::uuid &id,
+      bool allow_flight = true);
 
   // Remove current in-flight request for a transaction, if present
   // true: found, false: not found or none in-flight

@@ -338,6 +338,16 @@ namespace
     size_t handled_txs = 0;
     std::vector<bool> tx_results;
 
+    mutable size_t complement_calls = 0;
+    std::vector<crypto::hash> complement_hashes;
+
+    bool get_txpool_complement(const std::vector<crypto::hash>&, std::vector<crypto::hash>& hashes) const
+    {
+      ++complement_calls;
+      hashes = complement_hashes;
+      return true;
+    }
+
     cryptonote::blockchain_storage& get_blockchain_storage() { return storage; }
     bool handle_incoming_tx(const cryptonote::blobdata&, cryptonote::transaction&, crypto::hash&,
         cryptonote::tx_verification_context& tvc, cryptonote::relay_method method, bool)
@@ -380,6 +390,7 @@ namespace
     std::vector<notification> notifications;
     std::vector<relay> relays;
     std::vector<std::pair<context_type*, uint32_t>> connections;
+    std::vector<boost::uuids::uuid> callbacks;
     size_t dropped = 0;
 
     epee::net_utils::zone send_txs(std::vector<cryptonote::blobdata> txs,
@@ -404,6 +415,11 @@ namespace
     {
       ++dropped;
       return true;
+    }
+
+    void request_callback(const epee::net_utils::connection_context_base& context) override
+    {
+      callbacks.push_back(context.m_connection_id);
     }
 
     void for_each_connection(std::function<bool(context_type&, nodetool::peerid_type, uint32_t)> callback) override
@@ -459,6 +475,19 @@ namespace
           {payload.data(), payload.size()}, output, peer, handled);
       EXPECT_TRUE(handled);
       return result;
+    }
+
+    void drain_callbacks()
+    {
+      std::vector<boost::uuids::uuid> callbacks;
+      callbacks.swap(endpoint.callbacks);
+      for (const auto& peer : callbacks)
+      {
+        const auto connection = std::find_if(endpoint.connections.begin(), endpoint.connections.end(),
+            [&peer](const std::pair<context_type*, uint32_t>& entry) { return entry.first->m_connection_id == peer; });
+        ASSERT_NE(connection, endpoint.connections.end());
+        EXPECT_TRUE(protocol.on_callback(*connection->first));
+      }
     }
   };
 
@@ -2338,6 +2367,325 @@ TEST(cryptonote_protocol_handler, public_sync_below_hidden_target_keeps_safe_mod
   EXPECT_EQ(public_peer.m_state, cryptonote::cryptonote_connection_context::state_synchronizing);
   EXPECT_EQ(core.target_height, 101u);
   EXPECT_TRUE(core.safe_sync);
+}
+
+TEST_F(tx_relay_protocol_test, inventory_before_handshake_is_ignored)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {crypto::hash{1}};
+  context.m_remote_blockchain_height = 2;
+  context.m_state = context_type::state_before_handshake;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  EXPECT_TRUE(endpoint.notifications.empty());
+
+  context.set_state_normal();
+  context.m_tx_request_notification = 1;
+  ++context.m_callback_request_count;
+  ASSERT_TRUE(protocol.on_callback(context));
+  EXPECT_TRUE(endpoint.notifications.empty());
+}
+
+TEST_F(tx_relay_protocol_test, near_tip_inventory_waits_until_connection_is_normal)
+{
+  context.m_remote_blockchain_height = core.get_current_blockchain_height() + 2;
+  char id = 1;
+  for (const auto state : {context_type::state_synchronizing, context_type::state_standby})
+  {
+    SCOPED_TRACE(static_cast<int>(state));
+    cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+    inventory.t = {crypto::hash{id++}};
+    endpoint.notifications.clear();
+    context.m_state = state;
+    ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+    EXPECT_TRUE(endpoint.notifications.empty());
+
+    context.set_state_normal();
+    context.m_tx_request_notification = 1;
+    ++context.m_callback_request_count;
+    ASSERT_TRUE(protocol.on_callback(context));
+    ASSERT_EQ(endpoint.notifications.size(), 1u);
+    EXPECT_EQ(endpoint.notifications.back().peer, context.m_connection_id);
+    EXPECT_EQ(endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>().t, inventory.t);
+  }
+}
+
+TEST_F(tx_relay_protocol_test, inventory_from_far_ahead_is_ignored)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {crypto::hash{1}};
+  context.m_remote_blockchain_height = core.get_current_blockchain_height() + 3;
+  context.m_state = context_type::state_synchronizing;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  EXPECT_TRUE(endpoint.notifications.empty());
+
+  context.m_remote_blockchain_height = core.get_current_blockchain_height();
+  context.set_state_normal();
+  context.m_tx_request_notification = 1;
+  ++context.m_callback_request_count;
+  ASSERT_TRUE(protocol.on_callback(context));
+  EXPECT_TRUE(endpoint.notifications.empty());
+}
+
+TEST_F(tx_relay_protocol_test, deferred_inventory_does_not_block_normal_peer)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {crypto::hash{1}};
+  context.m_remote_blockchain_height = 2;
+  context.m_state = context_type::state_synchronizing;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  EXPECT_TRUE(endpoint.notifications.empty());
+
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1u);
+  EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+  EXPECT_EQ(endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>().t, inventory.t);
+
+  context.set_state_normal();
+  context.m_tx_request_notification = 1;
+  ++context.m_callback_request_count;
+  ASSERT_TRUE(protocol.on_callback(context));
+  EXPECT_EQ(endpoint.notifications.size(), 1u);
+}
+
+TEST_F(tx_relay_protocol_test, complement_hashes_survive_entering_sync)
+{
+  core.complement_hashes = {crypto::hash{1}};
+  cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT::request request{};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT>(request, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1u);
+  auto response = endpoint.notifications.back().get<cryptonote::NOTIFY_TX_POOL_HASH>();
+  endpoint.notifications.clear();
+
+  cryptonote::CORE_SYNC_DATA sync{};
+  sync.current_height = 2;
+  ASSERT_TRUE(protocol.process_payload_sync_data(sync, context, false));
+  ASSERT_EQ(context.m_state, context_type::state_synchronizing);
+  ASSERT_EQ(endpoint.callbacks.size(), 1u);
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(response, context), 1);
+  EXPECT_TRUE(endpoint.notifications.empty());
+
+  context.set_state_normal();
+  context.m_tx_request_notification = 1;
+  drain_callbacks();
+  ASSERT_EQ(endpoint.notifications.size(), 1u);
+  EXPECT_EQ(endpoint.notifications.back().peer, context.m_connection_id);
+  EXPECT_EQ(endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>().t, response.t);
+}
+
+TEST_F(tx_relay_protocol_test, new_stripe_callback_releases_pending_pool_requests)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {crypto::hash{1}};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+
+  context.m_callback_request_count = 1;
+  context.m_new_stripe_notification = 1;
+  context.m_last_request_time = boost::posix_time::microsec_clock::universal_time();
+  ASSERT_TRUE(protocol.on_callback(context));
+  ASSERT_EQ(context.m_state, context_type::state_synchronizing);
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 2);
+  EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+}
+
+TEST_F(tx_relay_protocol_test, resuming_sync_does_not_reuse_request_nonce)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {crypto::hash{1}};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+  const auto first = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+
+  cryptonote::CORE_SYNC_DATA sync{};
+  sync.current_height = 2;
+  ASSERT_TRUE(protocol.process_payload_sync_data(sync, context, false));
+  context.set_state_normal();
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 2);
+  const auto second = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  ASSERT_GT(second.n, first.n);
+
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.dandelionpp_fluff = true;
+  response.nonce = first.n;
+  EXPECT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  EXPECT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+  EXPECT_EQ(endpoint.notifications.size(), 2);
+
+  response.nonce = second.n;
+  EXPECT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  drain_callbacks();
+  ASSERT_EQ(endpoint.notifications.size(), 3);
+  EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+}
+
+TEST_F(tx_relay_protocol_test, queued_requests_wait_for_connection_callback)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {crypto::hash{1}};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+  const auto first = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.nonce = first.n;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  EXPECT_EQ(endpoint.notifications.size(), 1);
+  ASSERT_EQ(endpoint.callbacks.size(), 2);
+
+  drain_callbacks();
+  ASSERT_EQ(endpoint.notifications.size(), 2);
+  EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+  EXPECT_EQ(endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>().t, inventory.t);
+  EXPECT_EQ(context.m_callback_request_count.load(), 0u);
+  EXPECT_EQ(other_context.m_callback_request_count.load(), 0u);
+}
+
+TEST_F(tx_relay_protocol_test, queued_requests_recheck_sync_state_before_flying)
+{
+  const crypto::hash first_hash{1}, second_hash{2};
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {second_hash};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+  const auto before_sync = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+
+  inventory.t = {first_hash};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 2);
+  const auto first = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.nonce = first.n;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 2);
+  ASSERT_EQ(endpoint.callbacks.size(), 2);
+
+  // The peer enters sync after queue work is scheduled but before its callback runs.
+  cryptonote::CORE_SYNC_DATA sync{};
+  sync.current_height = 2;
+  ASSERT_TRUE(protocol.process_payload_sync_data(sync, other_context, false));
+  ASSERT_EQ(other_context.m_state, context_type::state_synchronizing);
+  other_context.m_last_request_time = boost::posix_time::microsec_clock::universal_time();
+  drain_callbacks();
+  EXPECT_EQ(endpoint.notifications.size(), 2);
+
+  // Cancellation lets another peer serve the old in-flight request immediately.
+  inventory.t = {second_hash};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 3);
+  EXPECT_EQ(endpoint.notifications.back().peer, context.m_connection_id);
+  const auto replacement = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  EXPECT_EQ(replacement.t, inventory.t);
+
+  response.nonce = replacement.n;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 3);
+  other_context.set_state_normal();
+  drain_callbacks();
+  ASSERT_EQ(endpoint.notifications.size(), 4);
+  EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+  const auto retried = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  EXPECT_GT(retried.n, before_sync.n);
+  ASSERT_EQ(retried.t.size(), 2);
+  EXPECT_NE(std::find(retried.t.begin(), retried.t.end(), first_hash), retried.t.end());
+  EXPECT_NE(std::find(retried.t.begin(), retried.t.end(), second_hash), retried.t.end());
+  EXPECT_EQ(context.m_callback_request_count.load(), 0u);
+  EXPECT_EQ(other_context.m_callback_request_count.load(), 0u);
+}
+
+TEST_F(tx_relay_protocol_test, new_stripe_takes_priority_over_queued_requests)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {crypto::hash{1}};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+  const auto first = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.nonce = first.n;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+  ASSERT_EQ(endpoint.callbacks.size(), 2);
+
+  // Both notifications are consumed by the same connection callback.
+  other_context.m_new_stripe_notification = 1;
+  other_context.m_last_request_time = boost::posix_time::microsec_clock::universal_time();
+  drain_callbacks();
+  EXPECT_EQ(other_context.m_state, context_type::state_synchronizing);
+  EXPECT_EQ(endpoint.notifications.size(), 1);
+  EXPECT_EQ(other_context.m_callback_request_count.load(), 0u);
+}
+
+TEST_F(tx_relay_protocol_test, queued_request_callbacks_are_coalesced)
+{
+  const crypto::hash first_hash{1}, second_hash{2};
+  cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+  inventory.t = {first_hash};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+  const auto first = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  inventory.t = {second_hash};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 2);
+  const auto second = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  inventory.t = {first_hash, second_hash};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.nonce = first.n;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  ASSERT_EQ(endpoint.callbacks.size(), 2);
+  response.nonce = second.n;
+  ASSERT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), 1);
+  EXPECT_EQ(endpoint.callbacks.size(), 2);
+  EXPECT_EQ(context.m_callback_request_count.load(), 1u);
+  EXPECT_EQ(other_context.m_callback_request_count.load(), 1u);
+  EXPECT_EQ(endpoint.notifications.size(), 2);
+
+  drain_callbacks();
+  ASSERT_EQ(endpoint.notifications.size(), 3);
+  EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+  const auto requested = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+  ASSERT_EQ(requested.t.size(), 2);
+  EXPECT_NE(std::find(requested.t.begin(), requested.t.end(), first_hash), requested.t.end());
+  EXPECT_NE(std::find(requested.t.begin(), requested.t.end(), second_hash), requested.t.end());
+  EXPECT_TRUE(endpoint.callbacks.empty());
+  EXPECT_EQ(context.m_callback_request_count.load(), 0u);
+  EXPECT_EQ(other_context.m_callback_request_count.load(), 0u);
+}
+
+TEST_F(tx_relay_protocol_test, complement_uses_hashes_for_v2_peers)
+{
+  core.complement_hashes = {crypto::hash{1}};
+  cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT::request request{};
+
+  ASSERT_EQ(1, notify<cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT>(request, context));
+  EXPECT_EQ(1u, core.complement_calls);
+  ASSERT_EQ(1u, endpoint.notifications.size());
+  const auto response = endpoint.notifications.front().get<cryptonote::NOTIFY_TX_POOL_HASH>();
+  EXPECT_EQ(core.complement_hashes, response.t);
+}
+
+TEST_F(tx_relay_protocol_test, complement_ignored_for_legacy_peers)
+{
+  core.complement_hashes = {crypto::hash{1}};
+
+  for (const uint32_t flags : {uint32_t{0}, uint32_t{P2P_SUPPORT_FLAG_FLUFFY_BLOCKS}})
+  {
+    endpoint.connections.front().second = flags;
+    endpoint.notifications.clear();
+    cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT::request request{};
+
+    ASSERT_EQ(1, notify<cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT>(request, context));
+    EXPECT_EQ(0u, core.complement_calls);
+    EXPECT_TRUE(endpoint.notifications.empty());
+  }
 }
 
 namespace nodetool { template class node_server<cryptonote::t_cryptonote_protocol_handler<test_core>>; }

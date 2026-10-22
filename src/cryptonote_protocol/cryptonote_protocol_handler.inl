@@ -191,11 +191,23 @@ namespace cryptonote
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
+  void t_cryptonote_protocol_handler<t_core>::set_sync_state(cryptonote_connection_context& context, cryptonote_connection_context::state state)
+  {
+    assert(state == cryptonote_connection_context::state_synchronizing || state == cryptonote_connection_context::state_standby);
+    const bool was_normal = context.m_state == cryptonote_connection_context::state_normal;
+    context.m_state = state;
+    // Pool responses are ignored while syncing.
+    if (was_normal)
+      m_request_manager.cancel_peer_requests(context.m_connection_id);
+  }
+  //------------------------------------------------------------------------------------------------------------------------
+  template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::on_callback(cryptonote_connection_context& context)
   {
     LOG_PRINT_CCONTEXT_L2("callback fired");
     CHECK_AND_ASSERT_MES_CC( context.m_callback_request_count > 0, false, "false callback fired, but context.m_callback_request_count=" << context.m_callback_request_count);
     --context.m_callback_request_count;
+    const bool request_txs = context.m_tx_request_notification.exchange(0);
 
     uint32_t notified = true;
     if (context.m_idle_peer_notification.compare_exchange_strong(notified, not notified))
@@ -215,7 +227,7 @@ namespace cryptonote
             context.m_refresh_for_next_span = false;
             context.m_expect_height = 0;
             context.m_requested_objects.clear();
-            context.m_state = cryptonote_connection_context::state_standby; // we'll go back to adding, then (if we can't), download
+            set_sync_state(context, cryptonote_connection_context::state_standby); // we'll go back to adding, then (if we can't), download
           }
           else
           {
@@ -231,7 +243,7 @@ namespace cryptonote
     if (context.m_new_stripe_notification.compare_exchange_strong(notified, not notified))
     {
       if (context.m_state == cryptonote_connection_context::state_normal)
-        context.m_state = cryptonote_connection_context::state_synchronizing;
+        set_sync_state(context, cryptonote_connection_context::state_synchronizing);
     }
 
     if(context.m_state == cryptonote_connection_context::state_synchronizing && context.m_last_request_time == boost::posix_time::not_a_date_time)
@@ -249,8 +261,17 @@ namespace cryptonote
     }
     else if(context.m_state == cryptonote_connection_context::state_standby)
     {
-      context.m_state = cryptonote_connection_context::state_synchronizing;
+      set_sync_state(context, cryptonote_connection_context::state_synchronizing);
       try_add_next_blocks(context);
+    }
+
+    // Check readiness and activate requests on this connection's strand, after
+    // processing any sync transitions. Cancellation cannot race this work.
+    if (request_txs &&
+        context.m_state == cryptonote_connection_context::state_normal && is_synchronized())
+    {
+      auto tx_req = m_request_manager.fly_available_requests(context.m_connection_id);
+      send_txs_request(context, std::move(tx_req));
     }
 
     return true;
@@ -546,7 +567,7 @@ namespace cryptonote
       return true;
     }
 
-    context.m_state = cryptonote_connection_context::state_synchronizing;
+    set_sync_state(context, cryptonote_connection_context::state_synchronizing);
     //let the socket to send response to handshake, but request callback, to let send request data after response
     LOG_PRINT_CCONTEXT_L2("requesting callback");
     ++context.m_callback_request_count;
@@ -756,7 +777,7 @@ namespace cryptonote
     else if( bvc.m_marked_as_orphaned )
     {
       context.m_needed_objects.clear();
-      context.m_state = cryptonote_connection_context::state_synchronizing;
+      set_sync_state(context, cryptonote_connection_context::state_synchronizing);
       NOTIFY_REQUEST_CHAIN::request r = {};
       m_core.get_short_chain_history(r.block_ids, context.m_expect_height);
       handler_request_blocks_history( r.block_ids ); // change the limit(?), sleep(?)
@@ -889,6 +910,14 @@ namespace cryptonote
     if(context.m_state != cryptonote_connection_context::state_normal)
       return 1;
 
+    bool tx_relay_v2 = false;
+    if (!m_p2p->for_connection(context.m_connection_id,
+      [&tx_relay_v2](cryptonote_connection_context&, nodetool::peerid_type, uint32_t support_flags) {
+        tx_relay_v2 = (support_flags & P2P_SUPPORT_FLAG_TX_RELAY_V2) != 0;
+        return true;
+      }) || !tx_relay_v2)
+      return 1;
+
     NOTIFY_TX_POOL_HASH::request inv_txes_req;
     if (!m_core.get_txpool_complement(std::move(arg.hashes), inv_txes_req.t))
     {
@@ -908,7 +937,7 @@ namespace cryptonote
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_TX_POOL_HASH (" << arg.t.size() << " txes)");
 
-    if (!is_synchronized())
+    if (context.m_state == cryptonote_connection_context::state_before_handshake || !is_synchronized())
     {
       LOG_DEBUG_CC(context, "Received new tx hash while syncing, ignored");
       return 1;
@@ -943,8 +972,9 @@ namespace cryptonote
       missing_tx_hashes.push_back(tx_hash);
     }
 
-    // Add all the missing to our request queue, and then kick off the request
-    auto txs_req = m_request_manager.enqueue_requests(missing_tx_hashes, context.m_connection_id);
+    // Queue missing hashes and request them when the connection is ready.
+    auto txs_req = m_request_manager.enqueue_requests(missing_tx_hashes, context.m_connection_id,
+        context.m_state == cryptonote_connection_context::state_normal);
     this->send_txs_request(context, std::move(txs_req));
     if (req_removed)
       this->fly_available_requests_in_queue();
@@ -2008,8 +2038,8 @@ skip:
   template<class t_core>
   void t_cryptonote_protocol_handler<t_core>::fly_available_requests_in_queue(const std::unordered_set<boost::uuids::uuid> &ignore_peers)
   {
-    // Let fly any queued tx requests that our connections can handle. This is good to call after removing requests from
-    // the request manager, since a connection might have become available to handle more requests.
+    // Wake each connection's strand to check for queued requests. Reading its
+    // state and activating requests here would race sync cancellation.
     m_p2p->for_each_connection([&](cryptonote_connection_context& context, nodetool::peerid_type _unused, uint32_t _unused2)->bool
     {
       if (ignore_peers.count(context.m_connection_id))
@@ -2018,15 +2048,12 @@ skip:
         return true;
       }
 
-      // If the connection isn't synced we don't need to send it requests
-      if (context.m_state != cryptonote_connection_context::state_normal)
+      uint32_t notified = 0;
+      if (context.m_tx_request_notification.compare_exchange_strong(notified, 1))
       {
-        MDEBUG(context << "not ready for tx request");
-        return true;
+        ++context.m_callback_request_count;
+        m_p2p->request_callback(context);
       }
-
-      auto tx_req = m_request_manager.fly_available_requests(context.m_connection_id);
-      this->send_txs_request(context, std::move(tx_req));
 
       return true;
     });
@@ -2430,7 +2457,7 @@ skip:
           {
             LOG_DEBUG_CC(context, "No other thread is adding blocks, and next span needed is ready, resuming");
             MLOG_PEER_STATE("resuming");
-            context.m_state = cryptonote_connection_context::state_standby;
+            set_sync_state(context, cryptonote_connection_context::state_standby);
             ++context.m_callback_request_count;
             check_span_lock.unlock();
             m_p2p->request_callback(context);
@@ -2461,13 +2488,13 @@ skip:
             LOG_DEBUG_CC(context, "Block queue is " << nspans << " and " << size << ", pausing");
           else if (!stripe_proceed_main && !stripe_proceed_secondary)
             LOG_DEBUG_CC(context, "We do not have the stripe required to download another block, pausing");
-          context.m_state = cryptonote_connection_context::state_standby;
+          set_sync_state(context, cryptonote_connection_context::state_standby);
           MLOG_PEER_STATE("pausing");
         }
 
         return true;
       } while(0);
-      context.m_state = cryptonote_connection_context::state_synchronizing;
+      set_sync_state(context, cryptonote_connection_context::state_synchronizing);
     }
 
     MDEBUG(context << " request_missing_objects: check " << check_having_blocks << ", force_next_span " << force_next_span
@@ -2501,7 +2528,7 @@ skip:
               {
                 MDEBUG(context << "Peer cannot serve the full span " << span.first << " - "
                     << (span.first + span.second - 1) << ", going to standby");
-                context.m_state = cryptonote_connection_context::state_standby;
+                set_sync_state(context, cryptonote_connection_context::state_standby);
                 return true;
               }
               MDEBUG(context << "Missing peer history for span " << span.first << " - " << (span.first + span.second - 1) << ", refreshing chain");
@@ -2510,7 +2537,7 @@ skip:
             if (match == span_match::different_chain)
             {
               MDEBUG(context << "Span " << span.first << " - " << (span.first + span.second - 1) << " does not match peer history, going to standby");
-              context.m_state = cryptonote_connection_context::state_standby;
+              set_sync_state(context, cryptonote_connection_context::state_standby);
               return true;
             }
             is_next = true;
@@ -2583,7 +2610,7 @@ skip:
             {
               MDEBUG(context << "Peer cannot serve the full span " << span.first << " - "
                   << (span.first + span.second - 1) << ", going to standby");
-              context.m_state = cryptonote_connection_context::state_standby;
+              set_sync_state(context, cryptonote_connection_context::state_standby);
               return true;
             }
             MDEBUG(context << "Missing peer history for span " << span.first << " - " << (span.first + span.second - 1) << ", refreshing chain");
@@ -2592,7 +2619,7 @@ skip:
           if (match == span_match::different_chain)
           {
             MDEBUG(context << "Span " << span.first << " - " << (span.first + span.second - 1) << " does not match peer history, going to standby");
-            context.m_state = cryptonote_connection_context::state_standby;
+            set_sync_state(context, cryptonote_connection_context::state_standby);
             return true;
           }
           is_next = true;
@@ -2703,7 +2730,7 @@ skip:
         {
           LOG_DEBUG_CC(context, "No other thread is adding blocks, resuming");
           MLOG_PEER_STATE("will try to add blocks next");
-          context.m_state = cryptonote_connection_context::state_standby;
+          set_sync_state(context, cryptonote_connection_context::state_standby);
           ++context.m_callback_request_count;
           m_p2p->request_callback(context);
           return true;
@@ -2791,9 +2818,12 @@ skip:
     val_expected = true;
     if (m_ask_for_txpool_complement.compare_exchange_strong(val_expected, false))
     {
+      bool requested = false;
       m_p2p->for_each_connection([&](cryptonote_connection_context& context, nodetool::peerid_type peer_id, uint32_t support_flags)->bool
       {
-        if(context.m_state < cryptonote_connection_context::state_synchronizing)
+        if (requested)
+          return false;
+        if(context.m_state != cryptonote_connection_context::state_normal)
         {
           MDEBUG(context << "not ready, ignoring");
           return true;
@@ -2803,8 +2833,11 @@ skip:
           MERROR(context << "Failed to request txpool complement");
           return true;
         }
+        requested = true;
         return false;
       });
+      if (!requested)
+        m_ask_for_txpool_complement = true;
     }
 
     return true;
@@ -3045,9 +3078,9 @@ skip:
     shrink_to_fit_hashes_container(r.hashes);
 
     MLOG_P2P_MESSAGE("-->>NOTIFY_GET_TXPOOL_COMPLEMENT: hashes.size()=" << r.hashes.size() );
-    post_notify<NOTIFY_GET_TXPOOL_COMPLEMENT>(r, context);
+    const bool sent = post_notify<NOTIFY_GET_TXPOOL_COMPLEMENT>(r, context);
     MLOG_PEER_STATE("requesting txpool complement");
-    return true;
+    return sent;
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
