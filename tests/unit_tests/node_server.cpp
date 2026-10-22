@@ -1963,13 +1963,14 @@ TEST(node_server, race_condition)
         condition.notify_all();
         condition.wait(guard, [this]{ return counter >= 5; });
       }
-      p2p_endpoint->send_txs(
+      std::vector<crypto::hash> tx_hashes(txs.size());
+      EXPECT_EQ(p2p_endpoint->send_txs(
         std::move(txs),
-        std::vector<crypto::hash>(txs.size()),
+        std::move(tx_hashes),
         epee::net_utils::zone::public_,
         {},
         relay_t::fluff
-      );
+      ), epee::net_utils::zone::public_);
       worker.join();
       return {};
     }
