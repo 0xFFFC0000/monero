@@ -1011,46 +1011,29 @@ namespace cryptonote
       return 1;
     }
 
-    // Parse the txs and prevent duplicates
-    std::vector<cryptonote::transaction> parsed_txs;
-    std::vector<crypto::hash> tx_hashes;
-    parsed_txs.reserve(arg.txs.size());
-    tx_hashes.reserve(arg.txs.size());
+    const bool processing = m_request_manager.start_processing_txs(context.m_connection_id, arg.nonce, arg.txs.size());
+    bool req_removed = false;
+    epee::unique_scope_guard finish_processing = [&] {
+      if (processing && m_request_manager.finish_processing_txs(context.m_connection_id, arg.nonce))
+        req_removed = true;
+    };
+
     {
       std::unordered_set<crypto::hash> seen;
       seen.reserve(arg.txs.size());
-      bool already_seen = false;
-      bool parse_failed = false;
-      for (auto& tx_blob : arg.txs)
+      for (const auto& tx_blob : arg.txs)
       {
         crypto::hash digest{};
         if (!tx_blob.empty())
           tools::sha256sum(reinterpret_cast<const uint8_t*>(tx_blob.data()), tx_blob.size(), digest);
-        already_seen = !seen.insert(digest).second;
-        if (already_seen)
-          break;
-        parse_failed = !cryptonote::parse_and_validate_tx_from_blob(tx_blob, parsed_txs.emplace_back(), tx_hashes.emplace_back(), true);
-        if (parse_failed)
-          break;
-        MLOG_P2P_MESSAGE("Including tx " << tx_hashes.back());
-      }
-
-      if (already_seen || parse_failed)
-      {
-        if (already_seen)
+        if (!seen.insert(digest).second)
+        {
           LOG_PRINT_CCONTEXT_L1("Duplicate transaction in notification, dropping connection");
-        else if (parse_failed)
-          LOG_PRINT_CCONTEXT_L1("Failed to parse incoming tx, dropping connection");
-        drop_connection(context, false, false);
-        return LEVIN_ERROR_CONNECTION;
+          drop_connection(context, false, false);
+          return LEVIN_ERROR_CONNECTION;
+        }
       }
     }
-
-    /* Indicate we're processing the txs so that in case processing takes a
-       while, we won't think any requests for the txs from that peer are stale.
-       We only mark a tx as processing for a specific peer, because we may still
-       be expecting some other peer to send us the tx. */
-    bool req_removed = m_request_manager.processing_txs(context.m_connection_id, arg.nonce, tx_hashes);
 
     /* If the txes were received over i2p/tor, the default is to "forward"
        with a randomized delay to further enhance the "white noise" behavior,
@@ -1077,18 +1060,28 @@ namespace cryptonote
     else
       stem_txs.reserve(arg.txs.size());
 
-    for (std::size_t i = 0; i < arg.txs.size(); ++i)
+    bool valid = true;
+    // Bound decoded memory by validating each transaction before parsing the next.
+    for (auto& tx_blob : arg.txs)
     {
-      auto &tx_blob = arg.txs.at(i);
-      auto tx = std::move(parsed_txs.at(i));
-      auto tx_hash = std::move(tx_hashes.at(i));
+      cryptonote::transaction tx;
+      crypto::hash tx_hash;
+      if (!cryptonote::parse_and_validate_tx_from_blob(tx_blob, tx, tx_hash, true))
+      {
+        LOG_PRINT_CCONTEXT_L1("Failed to parse incoming tx, dropping connection");
+        drop_connection(context, false, false);
+        valid = false;
+        break;
+      }
+      MLOG_P2P_MESSAGE("Including tx " << tx_hash);
 
       tx_verification_context tvc{};
       if (!m_core.handle_incoming_tx(tx_blob, tx, tx_hash, tvc, tx_relay, true) && !tvc.m_no_drop_offense)
       {
         LOG_PRINT_CCONTEXT_L1("Tx verification failed, dropping connection");
         drop_connection(context, false, false);
-        return LEVIN_ERROR_CONNECTION;
+        valid = false;
+        break;
       }
 
       if (m_request_manager.remove_request(tx_hash))
@@ -1113,6 +1106,8 @@ namespace cryptonote
       }
     }
 
+    finish_processing.reset();
+
     if (!stem_txs.empty())
     {
       //TODO: add announce usage here
@@ -1127,6 +1122,9 @@ namespace cryptonote
       arg.txs = std::move(fluff_txs);
       relay_transactions(arg, std::move(fluff_hashes), context.m_connection_id, context.m_remote_address.get_zone(), relay_method::fluff);
     }
+
+    if (!valid)
+      return LEVIN_ERROR_CONNECTION;
 
     if (req_removed)
       this->fly_available_requests_in_queue();

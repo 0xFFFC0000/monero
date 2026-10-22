@@ -225,42 +225,43 @@ bool request_manager::remove_request(const crypto::hash &tx_hash) {
   return true;
 }
 
-bool request_manager::processing_txs(const boost::uuids::uuid &peer_id, const uint64_t nonce, const std::vector<crypto::hash> &tx_hashes) {
+bool request_manager::start_processing_txs(const boost::uuids::uuid &peer_id, const uint64_t nonce, const std::size_t n_txs) {
   // Any txs we requested are expected to have nonce >0
   if (nonce == 0)
     return false;
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
-  // If no reqs found for that peer id and nonce, then we didn't request these hashes
   auto& by_peer_and_nonce = get_requests_by_peer_and_nonce(m_requested_txs);
   auto range = by_peer_and_nonce.equal_range(boost::make_tuple(peer_id, nonce));
   if (range.first == range.second)
     return false;
 
-  // Peer shouldn't have included *more* txs in the response than can be requested at once.
-  CHECK_AND_ASSERT_MES(tx_hashes.size() <= m_max_in_flight, false, "Too many tx_hashes in response");
-  const std::unordered_set<crypto::hash> peer_hashes(tx_hashes.begin(), tx_hashes.end());
-
-  MINFO("Processing " << tx_hashes.size() << " txs received from peer " << peer_id
+  CHECK_AND_ASSERT_MES(n_txs <= m_max_in_flight, false, "Too many txs in response");
+  MINFO("Processing " << n_txs << " txs received from peer " << peer_id
       << " (nonce=" << nonce << ")");
 
+  for (auto it = range.first; it != range.second; ++it) {
+    const bool r = start_processing_tx_req(it, by_peer_and_nonce);
+    CHECK_AND_ASSERT_MES(r, false, "Failed to mark tx request as processing");
+  }
+  return true;
+}
+
+bool request_manager::finish_processing_txs(const boost::uuids::uuid &peer_id, const uint64_t nonce) {
+  if (nonce == 0)
+    return false;
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  auto& by_peer_and_nonce = get_requests_by_peer_and_nonce(m_requested_txs);
+  auto range = by_peer_and_nonce.equal_range(boost::make_tuple(peer_id, nonce));
   bool req_removed = false;
   for (auto it = range.first; it != range.second;) {
-    const auto peer_hash_it = peer_hashes.find(it->tx_hash);
-    if (peer_hash_it == peer_hashes.end()) {
-      // If we requested a tx at this nonce, but it wasn't included in the peer's resp, then the peer is saying they
-      // didn't have the tx in their pool. We can remove it from our request queue for that specific peer.
-      MDEBUG("Removing tx request " << it->tx_hash << " only for peer " << it->peer_id);
-      it = erase_tx_request(it, by_peer_and_nonce);
-      req_removed = true;
+    if (!it->processing) {
+      ++it;
       continue;
     }
-
-    // We requested the tx from the peer, the peer responded with it, and now we're going to process it.
-    const bool r = start_processing_tx_req(it, by_peer_and_nonce);
-    CHECK_AND_ASSERT_MES(r, req_removed, "Failed to mark tx " << *peer_hash_it << " as processing");
-    ++it;
+    MDEBUG("Removing unanswered tx request " << it->tx_hash << " only for peer " << peer_id);
+    it = erase_tx_request(it, by_peer_and_nonce);
+    req_removed = true;
   }
-
   return req_removed;
 }
 

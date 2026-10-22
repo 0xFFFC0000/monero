@@ -330,6 +330,247 @@ TEST(node_server, anonymous_inbound_bind_port)
   EXPECT_FALSE(parse("65536"));
 }
 
+namespace
+{
+  struct tx_relay_test_core : test_core
+  {
+    cryptonote::blockchain_storage storage;
+    size_t handled_txs = 0;
+    std::vector<bool> tx_results;
+
+    cryptonote::blockchain_storage& get_blockchain_storage() { return storage; }
+    bool handle_incoming_tx(const cryptonote::blobdata&, cryptonote::transaction&, crypto::hash&,
+        cryptonote::tx_verification_context& tvc, cryptonote::relay_method method, bool)
+    {
+      const size_t index = handled_txs++;
+      if (index >= tx_results.size() || !tx_results[index])
+        return false;
+      tvc.m_relay = method;
+      return true;
+    }
+  };
+
+  struct tx_relay_test_endpoint : nodetool::p2p_endpoint_stub<cryptonote::cryptonote_connection_context>
+  {
+    using context_type = cryptonote::cryptonote_connection_context;
+    struct notification
+    {
+      int command;
+      boost::uuids::uuid peer;
+      std::string payload;
+
+      template<class Command>
+      typename Command::request get() const
+      {
+        typename Command::request request{};
+        EXPECT_EQ(command, int{Command::ID});
+        EXPECT_TRUE(epee::serialization::load_t_from_binary(request,
+            epee::strspan<uint8_t>(payload), &default_levin_limits));
+        return request;
+      }
+    };
+    struct relay
+    {
+      std::vector<cryptonote::blobdata> txs;
+      std::vector<crypto::hash> hashes;
+      epee::net_utils::zone origin;
+      boost::uuids::uuid source;
+      cryptonote::relay_method method;
+    };
+    std::vector<notification> notifications;
+    std::vector<relay> relays;
+    std::vector<std::pair<context_type*, uint32_t>> connections;
+    size_t dropped = 0;
+
+    epee::net_utils::zone send_txs(std::vector<cryptonote::blobdata> txs,
+        std::vector<crypto::hash>&& hashes, epee::net_utils::zone origin,
+        const boost::uuids::uuid& source, cryptonote::relay_method method) override
+    {
+      relays.push_back({std::move(txs), std::move(hashes), origin, source, method});
+      return origin;
+    }
+
+    bool invoke_notify_to_peer(int command, epee::levin::message_writer message,
+        const epee::net_utils::connection_context_base& context) override
+    {
+      const auto bytes = message.finalize_notify(command);
+      const auto offset = sizeof(epee::levin::bucket_head2);
+      notifications.push_back({command, context.m_connection_id,
+          std::string(reinterpret_cast<const char*>(bytes.data()) + offset, bytes.size() - offset)});
+      return true;
+    }
+
+    bool drop_connection(const epee::net_utils::connection_context_base&) override
+    {
+      ++dropped;
+      return true;
+    }
+
+    void for_each_connection(std::function<bool(context_type&, nodetool::peerid_type, uint32_t)> callback) override
+    {
+      for (const auto& connection : connections)
+        if (!callback(*connection.first, 0, connection.second))
+          break;
+    }
+
+    bool for_connection(const boost::uuids::uuid& id,
+        std::function<bool(context_type&, nodetool::peerid_type, uint32_t)> callback) override
+    {
+      for (const auto& connection : connections)
+        if (connection.first->m_connection_id == id)
+          return callback(*connection.first, 0, connection.second);
+      return false;
+    }
+  };
+
+  class tx_relay_protocol_test : public testing::Test
+  {
+  protected:
+    using context_type = cryptonote::cryptonote_connection_context;
+    tx_relay_test_core core;
+    tx_relay_test_endpoint endpoint;
+    cryptonote::t_cryptonote_protocol_handler<tx_relay_test_core> protocol{core, &endpoint, true};
+    context_type context;
+    context_type other_context;
+
+    tx_relay_protocol_test()
+    {
+      boost::uuids::uuid peer{};
+      boost::uuids::uuid other_peer{};
+      *peer.begin() = 1;
+      *other_peer.begin() = 2;
+      static_cast<epee::net_utils::connection_context_base&>(context) =
+          epee::net_utils::connection_context_base{peer, MAKE_IPV4_ADDRESS(192, 0, 2, 1), false, false};
+      static_cast<epee::net_utils::connection_context_base&>(other_context) =
+          epee::net_utils::connection_context_base{other_peer, MAKE_IPV4_ADDRESS(192, 0, 2, 2), false, false};
+      context.set_state_normal();
+      other_context.set_state_normal();
+      endpoint.connections = {{&context, P2P_SUPPORT_FLAGS}, {&other_context, P2P_SUPPORT_FLAGS}};
+    }
+
+    template<class Command>
+    int notify(typename Command::request& request, context_type& peer)
+    {
+      epee::byte_slice payload;
+      EXPECT_TRUE(epee::serialization::store_t_to_binary(request, payload));
+      epee::byte_stream output;
+      bool handled = false;
+      const int result = protocol.handle_invoke_map(true, Command::ID,
+          {payload.data(), payload.size()}, output, peer, handled);
+      EXPECT_TRUE(handled);
+      return result;
+    }
+  };
+
+  class tx_relay_partial_response_test : public tx_relay_protocol_test,
+      public testing::WithParamInterface<cryptonote::relay_method>
+  {
+  protected:
+    void check_partial_response(const cryptonote::blobdata& rejected_blob, size_t expected_handled)
+    {
+      const cryptonote::transaction accepted_tx{};
+      const auto accepted_blob = cryptonote::tx_to_blob(accepted_tx);
+      const auto accepted_hash = cryptonote::get_transaction_hash(accepted_tx);
+      const crypto::hash omitted_hash{1};
+      core.tx_results = {true, false};
+
+      cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+      inventory.t = {accepted_hash, omitted_hash};
+      ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context), 1);
+      ASSERT_EQ(endpoint.notifications.size(), 1u);
+      const auto requested = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+      ASSERT_EQ(requested.t, inventory.t);
+
+      inventory.t = {omitted_hash};
+      ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+      ASSERT_EQ(endpoint.notifications.size(), 1u);
+
+      cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+      response.nonce = requested.n;
+      response.dandelionpp_fluff = GetParam() == cryptonote::relay_method::fluff;
+      response.txs = {accepted_blob, rejected_blob};
+      EXPECT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), LEVIN_ERROR_CONNECTION);
+      EXPECT_EQ(core.handled_txs, expected_handled);
+      EXPECT_EQ(endpoint.dropped, 1u);
+
+      ASSERT_EQ(endpoint.relays.size(), 1u);
+      const auto& relayed = endpoint.relays.front();
+      EXPECT_EQ(relayed.txs, std::vector<cryptonote::blobdata>{accepted_blob});
+      EXPECT_EQ(relayed.hashes, std::vector<crypto::hash>{accepted_hash});
+      EXPECT_EQ(relayed.origin, epee::net_utils::zone::public_);
+      EXPECT_EQ(relayed.source, context.m_connection_id);
+      EXPECT_EQ(relayed.method, GetParam());
+
+      // Retry before on_connection_close releases the peer's requests.
+      ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, other_context), 1);
+      ASSERT_EQ(endpoint.notifications.size(), 2u);
+      EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+      EXPECT_EQ(endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>().t, inventory.t);
+    }
+  };
+}
+
+TEST_F(tx_relay_protocol_test, rejects_transaction_before_parsing_next_blob)
+{
+  // Script outputs expand substantially during parsing.
+  cryptonote::transaction tx;
+  tx.vout.resize(1024, cryptonote::tx_out{0, cryptonote::txout_to_script{}});
+  cryptonote::blobdata blob;
+  ASSERT_TRUE(cryptonote::tx_to_blob(tx, blob));
+
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.txs = {blob, "invalid transaction"};
+  EXPECT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), LEVIN_ERROR_CONNECTION);
+  EXPECT_EQ(core.handled_txs, 1);
+  EXPECT_EQ(endpoint.dropped, 1);
+}
+
+TEST_F(tx_relay_protocol_test, duplicate_transactions_rejected_before_admission)
+{
+  const auto blob = cryptonote::tx_to_blob(cryptonote::transaction{});
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.txs = {blob, blob};
+  EXPECT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), LEVIN_ERROR_CONNECTION);
+  EXPECT_EQ(core.handled_txs, 0);
+  EXPECT_EQ(endpoint.dropped, 1);
+}
+
+TEST_F(tx_relay_protocol_test, failed_response_releases_processing_requests)
+{
+  cryptonote::NOTIFY_TX_POOL_HASH::request hashes{};
+  hashes.t = {crypto::hash{1}};
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(hashes, context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 1);
+  const auto requested = endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+
+  cryptonote::NOTIFY_NEW_TRANSACTIONS::request response{};
+  response.nonce = requested.n;
+  response.txs = {"invalid transaction"};
+  EXPECT_EQ(notify<cryptonote::NOTIFY_NEW_TRANSACTIONS>(response, context), LEVIN_ERROR_CONNECTION);
+  EXPECT_EQ(endpoint.dropped, 1);
+
+  // Release requests before the endpoint delivers on_connection_close.
+  ASSERT_EQ(notify<cryptonote::NOTIFY_TX_POOL_HASH>(hashes, other_context), 1);
+  ASSERT_EQ(endpoint.notifications.size(), 2);
+  EXPECT_EQ(endpoint.notifications.back().peer, other_context.m_connection_id);
+  EXPECT_EQ(endpoint.notifications.back().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>().t, hashes.t);
+}
+
+TEST_P(tx_relay_partial_response_test, relays_accepted_prefix_on_parse_failure)
+{
+  check_partial_response("invalid transaction", 1);
+}
+
+TEST_P(tx_relay_partial_response_test, relays_accepted_prefix_on_verification_failure)
+{
+  cryptonote::transaction rejected_tx{};
+  rejected_tx.extra = {1};
+  check_partial_response(cryptonote::tx_to_blob(rejected_tx), 2);
+}
+
+INSTANTIATE_TEST_SUITE_P(stem_and_fluff, tx_relay_partial_response_test,
+    testing::Values(cryptonote::relay_method::stem, cryptonote::relay_method::fluff));
+
 TEST(node_server, ipv6_peer_group)
 {
   const auto make_ipv6 = [](const char* ip) {
