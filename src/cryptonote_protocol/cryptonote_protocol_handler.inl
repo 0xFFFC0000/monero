@@ -960,10 +960,10 @@ namespace cryptonote
     bool req_removed = false;
     for (const auto &tx_hash : arg.t)
     {
-      // If we have the tx already, we don't need to request it.
+      // Do not reveal privately held transactions by declining to request them.
       // Warning: the db read can potentially be expensive if someone is sending us many txs already in the db.
       // We can mitigate by keeping tack of how many chain txs someone sends us, and dropping after exceeding a threshold.
-      if (m_core.pool_has_tx(tx_hash) || m_core.get_blockchain_storage().have_tx(tx_hash))
+      if (m_core.pool_has_tx(tx_hash, relay_category::broadcasted) || m_core.get_blockchain_storage().have_tx(tx_hash))
       {
         // Remove it if it's in the request queue already since we already have it
         req_removed = m_request_manager.remove_request(tx_hash) || req_removed;

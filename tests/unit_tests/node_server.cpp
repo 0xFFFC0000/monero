@@ -103,7 +103,7 @@ public:
   virtual void on_transactions_relayed(epee::span<const cryptonote::blobdata> tx_blobs, cryptonote::relay_method tx_relay) {}
   cryptonote::network_type get_nettype() const { return cryptonote::MAINNET; }
   bool get_pool_transaction(const crypto::hash& id, cryptonote::blobdata& tx_blob, cryptonote::relay_category tx_category) const { return false; }
-  bool pool_has_tx(const crypto::hash &txid) const { return false; }
+  bool pool_has_tx(const crypto::hash &txid, cryptonote::relay_category tx_category = cryptonote::relay_category::legacy) const { return false; }
   bool get_blocks(uint64_t start_offset, size_t count, std::vector<std::pair<cryptonote::blobdata, cryptonote::block>>& blocks, std::vector<cryptonote::blobdata>& txs) const { return false; }
   bool get_transactions(const std::vector<crypto::hash>& txs_ids, std::vector<cryptonote::blobdata>& txs, std::vector<crypto::hash>& missed_txs, bool pruned = false) const { return false; }
   bool get_transactions(const std::vector<crypto::hash>& txs_ids, std::vector<cryptonote::transaction>& txs, std::vector<crypto::hash>& missed_txs) const { return false; }
@@ -340,12 +340,20 @@ namespace
 
     mutable size_t complement_calls = 0;
     std::vector<crypto::hash> complement_hashes;
+    std::map<crypto::hash, std::pair<cryptonote::blobdata, cryptonote::relay_method>> pool_txs;
 
     bool get_txpool_complement(const std::vector<crypto::hash>&, std::vector<crypto::hash>& hashes) const
     {
       ++complement_calls;
       hashes = complement_hashes;
       return true;
+    }
+
+    bool pool_has_tx(const crypto::hash& hash,
+        cryptonote::relay_category category = cryptonote::relay_category::legacy) const
+    {
+      const auto it = pool_txs.find(hash);
+      return it != pool_txs.end() && cryptonote::matches_category(it->second.second, category);
     }
 
     cryptonote::blockchain_storage& get_blockchain_storage() { return storage; }
@@ -2685,6 +2693,51 @@ TEST_F(tx_relay_protocol_test, complement_ignored_for_legacy_peers)
     ASSERT_EQ(1, notify<cryptonote::NOTIFY_GET_TXPOOL_COMPLEMENT>(request, context));
     EXPECT_EQ(0u, core.complement_calls);
     EXPECT_TRUE(endpoint.notifications.empty());
+  }
+}
+
+TEST_F(tx_relay_protocol_test, inventory_does_not_reveal_private_transactions)
+{
+  const cryptonote::relay_method methods[] = {
+    cryptonote::relay_method::none,
+    cryptonote::relay_method::local,
+    cryptonote::relay_method::stem,
+    cryptonote::relay_method::forward,
+    cryptonote::relay_method::block,
+    cryptonote::relay_method::fluff
+  };
+  char id = 1;
+  for (const auto state : {context_type::state_normal, context_type::state_synchronizing, context_type::state_standby})
+  {
+    SCOPED_TRACE(static_cast<int>(state));
+    for (const auto method : methods)
+    {
+      SCOPED_TRACE(static_cast<int>(method));
+      const crypto::hash held{id++};
+      const crypto::hash unknown{id++};
+      core.pool_txs.emplace(held, std::make_pair(cryptonote::blobdata("held transaction"), method));
+      endpoint.notifications.clear();
+      context.m_state = state;
+      cryptonote::NOTIFY_TX_POOL_HASH::request inventory{};
+      inventory.t = {held, unknown};
+      ASSERT_EQ(1, notify<cryptonote::NOTIFY_TX_POOL_HASH>(inventory, context));
+      if (state != context_type::state_normal)
+      {
+        EXPECT_TRUE(endpoint.notifications.empty());
+        context.set_state_normal();
+        context.m_tx_request_notification = 1;
+        ++context.m_callback_request_count;
+        ASSERT_TRUE(protocol.on_callback(context));
+      }
+      ASSERT_EQ(1u, endpoint.notifications.size());
+      const auto request = endpoint.notifications.front().get<cryptonote::NOTIFY_REQUEST_TX_POOL_TXS>();
+      const bool broadcasted = method == cryptonote::relay_method::block || method == cryptonote::relay_method::fluff;
+      const std::vector<crypto::hash> expected = broadcasted ?
+        std::vector<crypto::hash>{unknown} : std::vector<crypto::hash>{held, unknown};
+      EXPECT_EQ(expected.size(), request.t.size());
+      for (const auto& hash : expected)
+        EXPECT_NE(std::find(request.t.begin(), request.t.end(), hash), request.t.end());
+    }
   }
 }
 
