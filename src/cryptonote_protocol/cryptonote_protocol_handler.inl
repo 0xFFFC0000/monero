@@ -987,6 +987,9 @@ namespace cryptonote
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_REQUEST_TX_POOL_TXS (" << arg.t.size() << " txes)");
 
+    if (context.m_state == cryptonote_connection_context::state_before_handshake)
+      return 1;
+
     std::vector<blobdata> txs;
 
     if (arg.t.size() > max_n_txs_per_packet())
