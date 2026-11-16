@@ -1766,7 +1766,8 @@ namespace cryptonote
 
               return 1;
             }
-            else if (bvc.m_added_to_main_chain)
+            // No transaction requests are queued before initial synchronization.
+            else if (bvc.m_added_to_main_chain && m_synchronized)
             {
               block tmp;
               const std::vector<crypto::hash>* tx_hashes_ptr = nullptr;
@@ -1776,8 +1777,7 @@ namespace cryptonote
               }
               else
               {
-                crypto::hash ignore;
-                if (parse_and_validate_block_from_blob(block_entry.block, tmp, &ignore))
+                if (parse_and_validate_block_from_blob(block_entry.block, tmp))
                   tx_hashes_ptr = &tmp.tx_hashes;
               }
               if (tx_hashes_ptr)
