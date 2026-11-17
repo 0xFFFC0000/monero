@@ -1078,6 +1078,7 @@ namespace cryptonote
        sybil spy will be unable to link an IP to an i2p/tor connection). */
 
     const epee::net_utils::zone zone = context.m_remote_address.get_zone();
+    const bool public_fluff = zone == epee::net_utils::zone::public_ && arg.dandelionpp_fluff;
     relay_method tx_relay = zone == epee::net_utils::zone::public_ ?
       relay_method::stem : relay_method::forward;
 
@@ -1109,7 +1110,8 @@ namespace cryptonote
       MLOG_P2P_MESSAGE("Including tx " << tx_hash);
 
       tx_verification_context tvc{};
-      if (!m_core.handle_incoming_tx(tx_blob, tx, tx_hash, tvc, tx_relay, true) && !tvc.m_no_drop_offense)
+      const bool accepted = m_core.handle_incoming_tx(tx_blob, tx, tx_hash, tvc, tx_relay, true);
+      if (!accepted && !tvc.m_no_drop_offense)
       {
         LOG_PRINT_CCONTEXT_L1("Tx verification failed, dropping connection");
         drop_connection(context, false, false);
@@ -1117,7 +1119,8 @@ namespace cryptonote
         break;
       }
 
-      if (m_request_manager.remove_request(tx_hash))
+      // A private delivery must not cancel requests from peers that announced the hash publicly.
+      if (accepted && (public_fluff || tvc.m_relay == relay_method::fluff) && m_request_manager.remove_request(tx_hash))
         req_removed = true;
 
       switch (tvc.m_relay)
