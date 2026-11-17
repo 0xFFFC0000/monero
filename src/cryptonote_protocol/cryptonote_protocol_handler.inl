@@ -998,9 +998,12 @@ namespace cryptonote
       return 1;
     }
 
-    // Iterate over requested txin hashes
+    std::unordered_set<crypto::hash> seen;
     for (const auto &tx_hash : arg.t)
     {
+      if (!seen.insert(tx_hash).second)
+        continue;
+
       // Attempt to get the transaction blob from the mempool;
       cryptonote::blobdata tx_blob;
       if (m_core.get_pool_transaction(tx_hash, tx_blob, cryptonote::relay_category::broadcasted))
